@@ -1,0 +1,854 @@
+# Copyright (c) 2016 Intel Corporation
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+---
+
+heat_template_version: 2015-04-30
+
+description: |
+  #### Basic Trusted Analytics Platform
+
+  Trusted Analytics Platform (TAP)
+
+parameter_groups:
+
+- label: OpenStack Tenant Settings
+  parameters:
+    - tenant_name
+    - tenant_user
+    - tenant_pass
+    - os_api
+
+- label: Network Settings
+  parameters:
+    - external_network
+    - dns
+    - ntp
+    - proxy_http
+    - proxy_https
+    - proxy_ftp
+    - public_ip
+    - tap_domain
+
+- label: OpenStack Settings
+  parameters:
+    - key_pair
+    - centos_image
+    - ubuntu_image
+
+- label: Cloud Foundry Settings
+  parameters:
+    - cloudfoundry_flavor
+    - cloudfoundry_runners_count
+
+- label: Cloudera Settings
+  parameters:
+    - cloudera_flavor
+    - cloudera_workers_count
+
+parameters:
+
+########################################
+# OpenStack Tenant Settings
+#
+  tenant_name:
+    type: string
+    label: OpenStack Tenant Name
+    description: OpenStack Tenant(Project) Name
+
+  tenant_user:
+    type: string
+    label: OpenStack Tenant User Name
+    description: OpenStack User Name
+
+  tenant_pass:
+    type: string
+    label: OpenStack Tenant Password
+    description: OpenStack Password 
+    hidden: True   
+
+  os_api:
+    type: string
+    label: OpenStack identity API URL
+    description: OpenStack identity API URL
+
+########################################
+#TAP release settings
+#
+  ansible_repo:
+    type: string
+    default: https://github.com/trustedanalytics/ansible-playbooks
+
+  ansible_branch:
+    type: string
+    default: master
+
+########################################
+# Network Settings
+#
+  external_network:
+    type: string
+    label: External network name
+    description: External network with floating IP addresses.
+    default: net04_ext
+
+  dns:
+    type: comma_delimited_list
+    label: DNS Server
+    description: DNS Server IP
+
+  ntp:
+    type: comma_delimited_list
+    label: NTP Server
+    description: NTP Server IP
+
+  proxy_http:
+    type: string
+    label: HTTP Proxy
+    description: HTTP Proxy for Internet access
+    default: ""
+
+  proxy_https:
+    type: string
+    label: HTTPS Proxy
+    description: HTTPS Proxy for Internet access
+    default: ""
+
+  proxy_ftp:
+    type: string
+    label: FTP Proxy
+    description: FTP Proxy for Internet access
+    default: ""
+
+  public_ip:
+    type: string
+    label: Public IP
+    description: Public IP for TAP installation
+
+  tap_domain:
+    type: string
+    label: TAP Domain
+    description: Domain from TAP installation        
+
+########################################
+# OpenStack Settings
+# 
+  centos_image:
+    type: string
+    label: CentOS VM Image
+    default: centos-6-official
+    constraints:
+      - allowed_values:
+        - centos-6-official
+
+  ubuntu_image:
+    type: string
+    label: Ubuntu VM Image
+    default: ubuntu-trusty
+    constraints:
+      - allowed_values:
+        - ubuntu-trusty
+
+  key_pair:
+    type: string
+    label: SSH Key Pair Name
+    description: SSH Key Pair Name to deploy on JumpHost VM
+    constraints:
+      - custom_constraint: nova.keypair      
+
+########################################
+# CF settings
+#
+  cloudfoundry_flavor:
+    label: CF Server Size
+    type: string
+    default: m1.medium
+    description: Server size for Cloud Foundry servers
+    constraints:
+      - allowed_values:
+        - m1.medium
+
+  cloudfoundry_runners_count:
+    label: CF Runners Count
+    type: number
+    default: 2
+    description: Numbers of Clound Foundry Runners 
+    constraints:
+      - range: { min: 1, max: 10 }
+
+
+########################################
+# Cloudera settings
+#
+  cloudera_flavor:
+    label: Cloudera Servers Size
+    type: string
+    default: m1.medium
+    description: Server size for the Hadoop Cluster server
+    constraints:
+      - allowed_values:
+        - m1.medium
+        - m1.large
+        - m1.xlarge
+
+  cloudera_workers_count:
+    label: CDH Workers count
+    type: number
+    default: 3
+    description: Numbers of CDH Workers servers
+    constraints:
+      - range: { min: 3, max: 12 }
+
+########################################
+resources:
+
+########################################
+# Private networks
+#
+  router:
+    type: OS::Neutron::Router
+    properties:
+      external_gateway_info:
+        network: { get_param: external_network }
+
+  public_network:
+    type: OS::Neutron::Net
+
+  public_subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      name: PublicSubnet
+      network_id: { get_resource: public_network }
+      cidr: 10.0.0.0/24
+      dns_nameservers:
+        { get_param: dns }
+
+  router_interface_public:
+    type: OS::Neutron::RouterInterface
+    properties:
+      router_id: { get_resource: router }
+      subnet: { get_resource: public_subnet }
+
+  bosh_network:
+    type: OS::Neutron::Net
+
+  bosh_subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      name: BOSHSubnet
+      network_id: { get_resource: bosh_network }
+      cidr: 10.0.1.0/24
+      dns_nameservers:
+        { get_param: dns }
+
+  router_interface_bosh:
+    type: OS::Neutron::RouterInterface
+    properties:
+      router_id: { get_resource: router }
+      subnet: { get_resource: bosh_subnet }
+
+  cf_network:
+    type: OS::Neutron::Net
+
+  cf_subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      name: cfSubnet
+      network_id: { get_resource: cf_network }
+      cidr: 10.0.2.0/24
+      dns_nameservers:
+        { get_param: dns }
+
+  router_interface_cf:
+    type: OS::Neutron::RouterInterface
+    properties:
+      router_id: { get_resource: router }
+      subnet: { get_resource: cf_subnet }
+
+  docker_network:
+    type: OS::Neutron::Net
+
+  docker_subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      name: dockerSubnet
+      network_id: { get_resource: docker_network }
+      cidr: 10.0.4.0/24
+      dns_nameservers:
+        { get_param: dns }
+
+  router_interface_docker:
+    type: OS::Neutron::RouterInterface
+    properties:
+      router_id: { get_resource: router }
+      subnet: { get_resource: docker_subnet }
+
+  cdh_network:
+    type: OS::Neutron::Net
+
+  cloudera_subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      name: ClouderaSubnet
+      network_id: { get_resource: cdh_network }
+      cidr: 10.0.5.0/24
+      dns_nameservers:
+        { get_param: dns }
+
+  router_interface_cloudera:
+    type: OS::Neutron::RouterInterface
+    properties:
+      router_id: { get_resource: router }
+      subnet: { get_resource: cloudera_subnet }
+
+########################################
+# Security groups
+#
+  secgroup_bastion_ssh:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      name: 
+        list_join: [' ', [ {get_param: 'OS::stack_name' }, 'Bastion SSH' ]]
+      description: Bastion Security Group
+      rules:
+        - protocol: icmp
+          direction: egress
+        - protocol: tcp
+          direction: egress
+        - protocol: udp
+          direction: egress
+        - protocol: tcp
+          port_range_min: 22
+          port_range_max: 22
+          direction: ingress
+
+  secgroup_BOSH:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      name: 
+        list_join: [' ', [ {get_param: 'OS::stack_name' }, 'BOSH' ]]
+      description: BOSH deployed VMs
+      rules:
+        - protocol: icmp
+          direction: egress
+        - protocol: tcp
+          direction: egress
+        - protocol: udp
+          direction: egress
+        - protocol: tcp
+          port_range_min: 22
+          port_range_max: 22
+          remote_group_id: { get_resource: secgroup_bastion_ssh }
+          remote_mode: remote_group_id
+          direction: ingress
+        - protocol: tcp
+          port_range_min: 6868
+          port_range_max: 6868
+          remote_group_id: { get_resource: secgroup_bastion_ssh }
+          remote_mode: remote_group_id
+          direction: ingress
+        - protocol: tcp
+          port_range_min: 25555
+          port_range_max: 25555
+          remote_group_id: { get_resource: secgroup_bastion_ssh }
+          remote_mode: remote_group_id
+          direction: ingress
+        - protocol: icmp
+          remote_ip_prefix: 10.0.1.0/24
+          remote_mode: remote_ip_prefix
+          direction: ingress
+        - protocol: tcp
+          remote_ip_prefix: 10.0.1.0/24
+          remote_mode: remote_ip_prefix
+          direction: ingress
+        - protocol: udp
+          remote_ip_prefix: 10.0.1.0/24
+          remote_mode: remote_ip_prefix
+          direction: ingress
+
+  secgroup_cfPublic:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      name: 
+        list_join: [' ', [ {get_param: 'OS::stack_name' }, 'cfPublic' ]]
+      description: Cloud Foundry Public Group
+      rules:
+        - protocol: icmp
+          direction: egress
+        - protocol: tcp
+          direction: egress
+        - protocol: udp
+          direction: egress
+        - protocol: tcp
+          port_range_min: 22
+          port_range_max: 22
+          remote_group_id: { get_resource: secgroup_bastion_ssh }
+          remote_mode: remote_group_id
+          direction: ingress
+        - protocol: tcp
+          port_range_min: 80
+          port_range_max: 80
+          direction: ingress
+        - protocol: tcp
+          port_range_min: 443
+          port_range_max: 443
+          direction: ingress
+        - protocol: tcp
+          port_range_min: 4443
+          port_range_max: 4443
+          direction: ingress
+
+  secgroup_docker:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      name: 
+        list_join: [' ', [ {get_param: 'OS::stack_name' }, 'Docker' ]]
+      description: Docker Broker Security Group
+      rules:
+        - protocol: icmp
+          direction: egress
+        - protocol: tcp
+          direction: egress
+        - protocol: udp
+          direction: egress
+        - protocol: tcp
+          port_range_min: 32768
+          port_range_max: 61000
+          direction: ingress
+        - protocol: udp
+          port_range_min: 32768
+          port_range_max: 61000
+          direction: ingress
+
+  secgroup_consul:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      name: 
+        list_join: [' ', [ {get_param: 'OS::stack_name' }, 'Consul' ]]
+      description: Consul Security Group
+      rules:
+        - protocol: icmp
+          direction: egress
+        - protocol: tcp
+          direction: egress
+        - protocol: udp
+          direction: egress
+        - protocol: tcp
+          port_range_min: 8300
+          port_range_max: 8302
+          direction: ingress
+        - protocol: tcp
+          port_range_min: 53
+          port_range_max: 53
+          direction: ingress
+        - protocol: udp
+          port_range_min: 53
+          port_range_max: 53
+          direction: ingress
+
+  secgroup_cloudera:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      name: 
+        list_join: [' ', [ {get_param: 'OS::stack_name' }, 'Cloudera' ]]
+      description: Cloudera Security Group
+      rules:
+        - protocol: icmp
+          direction: egress
+        - protocol: tcp
+          direction: egress
+        - protocol: udp
+          direction: egress
+        - protocol: tcp
+          remote_group_id: { get_resource: secgroup_bastion_ssh }
+          remote_mode: remote_group_id
+          direction: ingress
+        - protocol: udp
+          remote_group_id: { get_resource: secgroup_bastion_ssh }
+          remote_mode: remote_group_id
+          direction: ingress
+        - protocol: icmp 
+          remote_group_id: { get_resource: secgroup_bastion_ssh }
+          remote_mode: remote_group_id
+          direction: ingress
+        - protocol: tcp
+          remote_group_id: { get_resource: secgroup_BOSH }
+          remote_mode: remote_group_id
+          direction: ingress
+        - protocol: udp
+          remote_group_id: { get_resource: secgroup_BOSH }
+          remote_mode: remote_group_id
+          direction: ingress
+        - protocol: icmp 
+          remote_group_id: { get_resource: secgroup_BOSH }
+          remote_mode: remote_group_id
+          direction: ingress
+        - protocol: icmp
+          remote_ip_prefix: 10.0.5.0/24
+          remote_mode: remote_ip_prefix
+          direction: ingress
+        - protocol: tcp
+          remote_ip_prefix: 10.0.5.0/24
+          remote_mode: remote_ip_prefix
+          direction: ingress
+        - protocol: udp
+          remote_ip_prefix: 10.0.5.0/24
+          remote_mode: remote_ip_prefix
+          direction: ingress
+
+########################################
+# Floating IPs
+#
+  bastion_floating_ip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network: { get_param: external_network }
+
+########################################
+# SSH Keys
+#
+  ssh_key_internal:
+    type: "OS::Nova::KeyPair"
+    properties:
+      name: 
+        list_join: [ '-', [ { get_param: "OS::stack_name" }, 'internal' ]]
+      save_private_key: True
+
+  password:
+    type: "OS::Heat::RandomString"
+    properties:
+      length: 16
+      sequence: lettersdigits
+
+########################################
+# Servers / bastion
+#
+  bastion_wait_condition:
+    type: OS::Heat::WaitCondition
+    properties:
+      handle: { get_resource: bastion_wait_condition_handle }
+      timeout: 3600
+
+  bastion_wait_condition_handle:
+    type: OS::Heat::WaitConditionHandle
+
+  bastion_server:
+    type: "OS::Nova::Server"
+    properties:
+      key_name: { get_param: key_pair }
+      flavor: m1.medium
+      name: 
+        list_join: ['-', [ {get_param: "OS::stack_name" }, 'JumpBox' ]]
+      image: { get_param: ubuntu_image }
+      metadata:
+        stack-id: { get_param: "OS::stack_id" }
+        stack-name: { get_param: "OS::stack_name" }
+      config_drive: true
+      user_data_format: RAW
+      user_data:
+        str_replace:
+          template: |
+            #cloud-config
+            #https://bugs.launchpad.net/ubuntu/+source/software-properties/+bug/1433761
+            bootcmd:
+              - http_proxy=$http_proxy https_proxy=$https_proxy add-apt-repository -y ppa:ansible/ansible
+            package_update: true
+            package_upgrade: true
+            apt_http_proxy: $http_proxy
+            apt_https_proxy: $https_proxy
+            apt_ftp_proxy: $ftp_proxy
+            manage_etc_hosts: true
+            packages:
+              - ansible
+              - git
+              - python-pip
+              - autoconf
+              - build-essential
+              - python-dev
+            write_files:
+              - path: /etc/sudoers.d/root
+                permissions: '0440'
+                content: |
+                  Defaults:root	!requiretty
+              - path: /etc/openstack/clouds.yaml
+                permissions: '0440'
+                content: |
+                  clouds:
+                    TAP:
+                      auth:
+                        auth_url: $os_api
+                        project_name: $tenant_name
+                        username: $tenant_user
+                        password: $tenant_pass
+              - path: /tmp/cloudfoundry.sh
+                permissions: '0544'
+                content: |
+                  #!/bin/bash
+                  
+                  function senderr {
+                      $wc_notify --data-binary '{"status": "FAILURE", "reason": "'"$1"'", "data": "'"$2"'"}'
+                      exit 1
+                  }
+
+                  HORIZON_IP=`awk -F / '/auth_url: / { print $3 }' /etc/openstack/clouds.yaml|cut -d: -f1`
+                  sed -i -e 's/KEY----- /KEY-----\n/' -e 's/ -----END/\n-----END/' /root/.ssh/id_rsa
+                  sed -i -e '2,2 s/ /\n/g' /root/.ssh/id_rsa
+                  cp /root/.ssh/id_rsa /root/key.pem
+
+                  export http_proxy=$http_proxy
+                  export https_proxy=$https_proxy
+                  export no_proxy=$HORIZON_IP,169.254.169.254
+                  #maybe those should be installed via ansible?
+                  pip install -q --proxy $https_proxy pbr
+                  pip install -q --proxy $https_proxy shade
+                  pip install -q --proxy $https_proxy six --upgrade
+                  #ansible-pull -U $ansible_repo -C $ansible_branch  -f
+                  if [ "$?" -ne 0 ]; then
+                     senderr "Error configuring server"
+                  fi
+                  date >> /tmp/time
+                  $wc_notify --data-binary '{"status": "SUCCESS"}'
+              - path: /root/.ssh/id_rsa
+                permissions: '0400'
+                content: "$secret_key_pem"
+              - path: /etc/ansible/ansible.cfg
+                content: |
+                  [defaults]
+                  log_path=/var/log/ansible.log
+              - path: /etc/ansible/hosts
+                content: |
+                  [jump-boxes]
+                  localhost ansible_connection=local
+
+                  [jump-boxes:vars]
+                  http_proxy=$http_proxy
+                  https_proxy=$http_proxy
+                  ftp_proxy=$ftp_proxy
+                  ntp_servers=['$ntp_server']
+                  key_name=$key_name
+                  key_name_wait_condition_handle=$wc_notify
+                  bosh_subnet_id=$bosh_subnet_id
+                  bosh_dns=['$bosh_dns']
+                  bosh_default_security_groups=['$bosh_default_security_groups']
+                  cf_private_subnet_id=$cf_private_subnet_id
+                  cf_public_subnet_id=$cf_public_subnet_id
+                  cf_public_security_group=$cf_public_security_group
+                  cf_password=$cf_password
+                  cf_system_domain=$cf_system_domain
+                  cf_runner_z1_instances=$cf_runner_z1_instances
+                  cf_elastic_ip=$cf_elastic_ip
+                  cf_runner_z1_instance_type=$cf_runner_z1_instance_type
+                  docker_subnet_id=$docker_subnet_id
+                  docker_broker_security_group=$docker_broker_security_group
+                  cloud=openstack
+                  stack=$stack
+                  id_stack=$id_stack
+                  region=RegionOne
+            runcmd:
+              - /tmp/cloudfoundry.sh
+          params:
+            $secret_key_pem: { get_attr: [ssh_key_internal, private_key] }
+            $tenant_name: { get_param: tenant_name }
+            $tenant_user: { get_param: tenant_user }
+            $tenant_pass: { get_param: tenant_pass }
+            $os_api: { get_param: os_api }
+            $http_proxy: { get_param: proxy_http }
+            $https_proxy: { get_param: proxy_https }
+            $ftp_proxy: { get_param: proxy_ftp }
+            $ansible_repo: { get_param: ansible_repo }
+            $ansible_branch: { get_param: ansible_branch }
+            $wc_notify: { get_attr: ['bastion_wait_condition_handle', 'curl_cli'] }
+            $key_name: { get_resource: ssh_key_internal }
+            $bosh_subnet_id: { get_resource: bosh_network }
+            $bosh_default_security_groups: { get_resource: secgroup_BOSH }
+            $cf_private_subnet_id: { get_resource: cf_network }
+            $cf_public_subnet_id: { get_resource: public_network }
+            $cf_public_security_group: { get_resource: secgroup_cfPublic }
+            $cf_password: { get_attr: [ password, value ] }
+            $cf_system_domain: { get_param: tap_domain }
+            $cf_runner_z1_instances: { get_param: cloudfoundry_runners_count }
+            $cf_elastic_ip: { get_param: public_ip }
+            $cf_runner_z1_instance_type: { get_param: cloudfoundry_flavor }
+            $docker_subnet_id: { get_resource: docker_network }
+            $docker_broker_security_group: { get_resource: secgroup_docker }
+            $stack: { get_param: "OS::stack_name" }
+            $id_stack: { get_param: "OS::stack_id" }
+            $bosh_dns:
+              list_join: ["','", { get_param: dns } ]
+            $ntp_server:
+              list_join: ["','", { get_param: ntp } ]
+      networks:
+        - port: { get_resource: bastion_port }
+
+  bastion_port:
+    type: OS::Neutron::Port
+    properties:
+      network: { get_resource: public_network }
+      security_groups:
+        - { get_resource: secgroup_bastion_ssh }
+      fixed_ips:
+        - subnet: { get_resource: public_subnet }
+
+  bastion_floating_ip_assoc:
+    type: OS::Neutron::FloatingIPAssociation
+    properties:
+      floatingip_id: { get_resource: bastion_floating_ip }
+      port_id: { get_resource: bastion_port }
+
+  centos_cc:
+    type: OS::Heat::CloudConfig
+    properties:
+      cloud_config: 
+        package_update: true
+        package_upgrade: true
+
+########################################
+# Servers / nignx
+#
+  nginx_server:
+    type: "OS::Nova::Server"
+    properties:
+      key_name: { get_resource: ssh_key_internal }
+      flavor: m1.medium
+      name: 
+        list_join: ['-', [ {get_param: "OS::stack_name" }, 'Nginx' ]]
+      image: { get_param: centos_image }
+      metadata:
+        stack-id: { get_param: "OS::stack_id" }
+        stack-name: { get_param: "OS::stack_name" }
+      config_drive: true
+      networks:
+        - port: { get_resource: nginx_port }
+      user_data_format: RAW
+      user_data:
+        #cloud-config
+        { get_resource: centos_cc }
+
+  nginx_port:
+    type: OS::Neutron::Port
+    properties:
+      network: { get_resource: public_network }
+      security_groups:
+        - { get_resource: secgroup_cfPublic}
+      fixed_ips:
+        - subnet: { get_resource: public_subnet }
+  ip_assoc:
+    type: AWS::EC2::EIPAssociation
+    properties:
+      EIP: { get_param: public_ip }
+      InstanceId: { get_resource: nginx_server }
+      NetworkInterfaceId: { get_resource: nginx_port }
+
+########################################
+# Servers / cdh-masters
+#
+  cloudera_masters:
+    type: OS::Heat::ResourceGroup
+    depends_on: cloudera_subnet
+    properties:
+      count: 2
+      resource_def:
+        type: "OS::Nova::Server"
+        properties:
+          key_name: { get_resource: ssh_key_internal }
+          flavor: { get_param: cloudera_flavor }
+          name:
+            list_join: ['-', [ {get_param: "OS::stack_name" }, 'Cloudera-Master' ]]
+          image: { get_param: centos_image }
+          metadata:
+            stack-id: { get_param: "OS::stack_id" }
+            stack-name: { get_param: "OS::stack_name" }
+          config_drive: true
+          security_groups:
+            - { get_resource: secgroup_cloudera }
+            - { get_resource: secgroup_consul }
+          networks:
+            - network: { get_resource: cdh_network }
+
+########################################
+# Servers / cdh-workers
+#
+  cloudera_workers:
+    type: OS::Heat::ResourceGroup
+    depends_on: cloudera_subnet
+    properties:
+      count: { get_param: cloudera_workers_count }
+      resource_def:
+        type: "OS::Nova::Server"
+        properties:
+          key_name: { get_resource: ssh_key_internal }
+          flavor: { get_param: cloudera_flavor }
+          name:
+            list_join: ['-', [ {get_param: "OS::stack_name" }, 'Cloudera-Worker' ]]
+          image: { get_param: centos_image }
+          metadata:
+            stack-id: { get_param: "OS::stack_id" }
+            stack-name: { get_param: "OS::stack_name" }
+          config_drive: true
+          security_groups:
+            - { get_resource: secgroup_cloudera }
+          networks:
+            - network: { get_resource: cdh_network }
+
+########################################
+# Servers / cdh-manager
+#
+  cloudera_manager:
+    type: "OS::Nova::Server"
+    properties:
+      key_name: { get_resource: ssh_key_internal }
+      flavor: m1.medium
+      name: 
+        list_join: ['-', [ {get_param: "OS::stack_name" }, 'Cloudera-Manager' ]]
+      image: { get_param: centos_image }
+      metadata:
+        stack-id: { get_param: "OS::stack_id" }
+        stack-name: { get_param: "OS::stack_name" }
+      config_drive: true
+      networks:
+        - port: { get_resource: manager_port }
+
+  manager_port:
+    type: OS::Neutron::Port
+    properties:
+      network: { get_resource: cdh_network }
+      security_groups:
+        - { get_resource: secgroup_cloudera }
+        - { get_resource: secgroup_consul }
+      fixed_ips:
+        - subnet: { get_resource: cloudera_subnet }
+
+########################################
+outputs:
+  baston_server_ip:
+    description: IP address of the Application server
+    value: { get_attr: [ bastion_floating_ip, floating_ip_address] }
+
+  console:
+    value: 
+      list_join: [ '.', [ 'https://console', { get_param: tap_domain } ]]
+    description: Trusted Analytics Console
+
+  cf_api_endpoint:
+    value:
+     list_join: [ '.', [ 'https://api', { get_param: tap_domain } ]]
+    description: Cloud Foundry API Endpoint
+
+  username:
+    value: "admin"
+    description: Username
+
+  password:
+    value: { get_attr: [ password, value ] }
+    description: Password
