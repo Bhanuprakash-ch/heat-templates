@@ -61,6 +61,15 @@ parameter_groups:
   parameters:
     - logsearch_deployment_size
 
+- label: SMTP Settings
+  parameters:
+    - smtp_host
+    - smtp_user
+    - smtp_pass
+    - smtp_port
+    - smtp_sender_email
+    - smtp_sender_name
+
 parameters:
 
 ########################################
@@ -214,7 +223,6 @@ parameters:
     constraints:
       - range: { min: 3, max: 12 }
 
-
 ########################################
 # Logsearch settings
 #
@@ -228,6 +236,40 @@ parameters:
         - small
         - medium
 
+########################################
+# SMTP settings
+#
+  smtp_host:
+    label: SMTP Host
+    type: string
+    description: SMTP Server hostname or IP address
+
+  smtp_user:
+    label: SMTP Username
+    type: string
+    default: ""
+    description: User name for login to SMTP Server
+
+  smtp_pass:
+    label: SMTP Password
+    type: string
+    default: ""
+    description: Password for login to SMTP Server
+
+  smtp_port:
+    label: SMTP Port
+    type: string
+    description: SMTP Server port
+
+  smtp_sender_email:
+    label: SMTP sender E-mail
+    type: string
+    description: SMTP sender E-Mail address (from address)
+
+  smtp_sender_name:
+    label: SMTP sender name
+    type: string
+    description: SMTP sender name (from name)
 
 ########################################
 resources:
@@ -686,6 +728,12 @@ resources:
                   cf_runner_z1_instances=$cf_runner_z1_instances
                   cf_elastic_ip=$cf_elastic_ip
                   cf_runner_z1_instance_type=$cf_runner_z1_instance_type
+                  cf_smtp_host=$smtp_host
+                  cf_smtp_sender_user=$smtp_user
+                  cf_smtp_password=$smtp_pass
+                  cf_smtp_port=$smtp_port
+                  cf_smtp_sender_email=$smtp_sender_email
+                  cf_smtp_sender_name=$smtp_sender_name
                   docker_subnet_id=$docker_subnet_id
                   docker_broker_security_group=$docker_broker_security_group
                   logsearch_deployment_size=$logsearch_deployment_size
@@ -719,6 +767,12 @@ resources:
             $cf_runner_z1_instances: { get_param: cloudfoundry_runners_count }
             $cf_elastic_ip: { get_param: public_ip }
             $cf_runner_z1_instance_type: { get_param: cloudfoundry_flavor }
+            $smtp_host: { get_param: smtp_host }
+            $smtp_user: { get_param: smtp_user }
+            $smtp_pass: { get_param: smtp_pass }
+            $smtp_port: { get_param: smtp_port }
+            $smtp_sender_email: { get_param: smtp_sender_email }
+            $smtp_sender_name: { get_param: smtp_sender_name }
             $docker_subnet_id: { get_resource: docker_network }
             $docker_broker_security_group: { get_resource: secgroup_docker }
             $logsearch_deployment_size: { get_param: logsearch_deployment_size }
