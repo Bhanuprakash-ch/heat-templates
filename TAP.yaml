@@ -631,8 +631,8 @@ resources:
         list_join: ['-', [ {get_param: "OS::stack_name" }, 'JumpBox' ]]
       image: { get_param: ubuntu_image }
       metadata:
-        stack-id: { get_param: "OS::stack_id" }
-        stack-name: { get_param: "OS::stack_name" }
+        stack_id: { get_param: "OS::stack_id" }
+        stack_name: { get_param: "OS::stack_name" }
       config_drive: true
       user_data_format: RAW
       user_data:
@@ -739,8 +739,8 @@ resources:
                   logsearch_deployment_size=$logsearch_deployment_size
                   logsearch_subnet_id=$logsearch_subnet_id
                   cloud=openstack
-                  stack=$stack
-                  id_stack=$id_stack
+                  stack=$stack_name
+                  stack_id=$stack_id
                   region=RegionOne
             runcmd:
               - /tmp/cloudfoundry.sh
@@ -777,8 +777,8 @@ resources:
             $docker_broker_security_group: { get_resource: secgroup_docker }
             $logsearch_deployment_size: { get_param: logsearch_deployment_size }
             $logsearch_subnet_id: { get_resource: logsearch_network }
-            $stack: { get_param: "OS::stack_name" }
-            $id_stack: { get_param: "OS::stack_id" }
+            $stack_name: { get_param: "OS::stack_name" }
+            $stack_id: { get_param: "OS::stack_id" }
             $bosh_dns:
               list_join: ["','", { get_param: dns } ]
             $ntp_server:
@@ -820,8 +820,8 @@ resources:
         list_join: ['-', [ {get_param: "OS::stack_name" }, 'Nginx' ]]
       image: { get_param: centos_image }
       metadata:
-        stack-id: { get_param: "OS::stack_id" }
-        stack-name: { get_param: "OS::stack_name" }
+        stack_id: { get_param: "OS::stack_id" }
+        stack_name: { get_param: "OS::stack_name" }
       config_drive: true
       networks:
         - port: { get_resource: nginx_port }
@@ -862,8 +862,8 @@ resources:
             list_join: ['-', [ {get_param: "OS::stack_name" }, 'Cloudera-Master' ]]
           image: { get_param: centos_image }
           metadata:
-            stack-id: { get_param: "OS::stack_id" }
-            stack-name: { get_param: "OS::stack_name" }
+            stack_id: { get_param: "OS::stack_id" }
+            stack_name: { get_param: "OS::stack_name" }
           config_drive: true
           security_groups:
             - { get_resource: secgroup_cloudera }
@@ -888,8 +888,8 @@ resources:
             list_join: ['-', [ {get_param: "OS::stack_name" }, 'Cloudera-Worker' ]]
           image: { get_param: centos_image }
           metadata:
-            stack-id: { get_param: "OS::stack_id" }
-            stack-name: { get_param: "OS::stack_name" }
+            stack_id: { get_param: "OS::stack_id" }
+            stack_name: { get_param: "OS::stack_name" }
           config_drive: true
           security_groups:
             - { get_resource: secgroup_cloudera }
@@ -908,8 +908,8 @@ resources:
         list_join: ['-', [ {get_param: "OS::stack_name" }, 'Cloudera-Manager' ]]
       image: { get_param: centos_image }
       metadata:
-        stack-id: { get_param: "OS::stack_id" }
-        stack-name: { get_param: "OS::stack_name" }
+        stack_id: { get_param: "OS::stack_id" }
+        stack_name: { get_param: "OS::stack_name" }
       config_drive: true
       networks:
         - port: { get_resource: manager_port }
