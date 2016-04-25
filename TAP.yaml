@@ -57,6 +57,10 @@ parameter_groups:
     - cloudera_flavor
     - cloudera_workers_count
 
+- label: Logsearch Settings
+  parameters:
+    - logsearch_deployment_size
+
 parameters:
 
 ########################################
@@ -210,6 +214,21 @@ parameters:
     constraints:
       - range: { min: 3, max: 12 }
 
+
+########################################
+# Logsearch settings
+#
+  logsearch_deployment_size:
+    label: Logsearch Deployment Size
+    type: string
+    default: small
+    description: Number of instances Logsearch
+    constraints:
+      - allowed_values:
+        - small
+        - medium
+
+
 ########################################
 resources:
 
@@ -293,6 +312,24 @@ resources:
     properties:
       router_id: { get_resource: router }
       subnet: { get_resource: docker_subnet }
+
+  logsearch_network:
+    type: OS::Neutron::Net
+
+  logsearch_subnet:
+    type: OS::Neutron::Subnet
+    properties:
+      name: logsearchSubnet
+      network_id: { get_resource: logsearch_network }
+      cidr: 10.0.7.0/24
+      dns_nameservers:
+        { get_param: dns }
+
+  router_interface_logsearch:
+    type: OS::Neutron::RouterInterface
+    properties:
+      router_id: { get_resource: router }
+      subnet: { get_resource: logsearch_subnet }
 
   cdh_network:
     type: OS::Neutron::Net
@@ -651,6 +688,8 @@ resources:
                   cf_runner_z1_instance_type=$cf_runner_z1_instance_type
                   docker_subnet_id=$docker_subnet_id
                   docker_broker_security_group=$docker_broker_security_group
+                  logsearch_deployment_size=$logsearch_deployment_size
+                  logsearch_subnet_id=$logsearch_subnet_id
                   cloud=openstack
                   stack=$stack
                   id_stack=$id_stack
@@ -682,6 +721,8 @@ resources:
             $cf_runner_z1_instance_type: { get_param: cloudfoundry_flavor }
             $docker_subnet_id: { get_resource: docker_network }
             $docker_broker_security_group: { get_resource: secgroup_docker }
+            $logsearch_deployment_size: { get_param: logsearch_deployment_size }
+            $logsearch_subnet_id: { get_resource: logsearch_network }
             $stack: { get_param: "OS::stack_name" }
             $id_stack: { get_param: "OS::stack_id" }
             $bosh_dns:
