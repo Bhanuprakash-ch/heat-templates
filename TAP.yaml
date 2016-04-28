@@ -38,6 +38,7 @@ parameter_groups:
     - proxy_http
     - proxy_https
     - proxy_ftp
+    - proxy_no
     - public_ip
     - tap_domain
 
@@ -113,7 +114,7 @@ parameters:
   external_network:
     type: string
     label: External network name
-    description: External network with floating IP addresses.
+    description: External network with floating IP addresses
     default: net04_ext
 
   dns:
@@ -144,6 +145,12 @@ parameters:
     description: FTP Proxy for Internet access
     default: ""
 
+  proxy_no:
+    type: comma_delimited_list
+    label: No Proxy
+    description: List of comma separated IPs or domains that should by accessed without proxy server
+    default: ""
+
   public_ip:
     type: string
     label: Public IP
@@ -152,7 +159,7 @@ parameters:
   tap_domain:
     type: string
     label: TAP Domain
-    description: Domain from TAP installation        
+    description: Domain from TAP installation
 
 ########################################
 # OpenStack Settings
@@ -660,6 +667,10 @@ resources:
                 permissions: '0440'
                 content: |
                   Defaults:root	!requiretty
+              - path: /etc/vim/vimrc.local
+                permissions: '0640'
+                content: |
+                  colorscheme desert
               - path: /etc/openstack/clouds.yaml
                 permissions: '0440'
                 content: |
@@ -680,18 +691,20 @@ resources:
                       exit 1
                   }
 
-                  HORIZON_IP=`awk -F / '/auth_url: / { print $3 }' /etc/openstack/clouds.yaml|cut -d: -f1`
+                  #HORIZON_IP=`awk -F / '/auth_url: / { print $3 }' /etc/openstack/clouds.yaml|cut -d: -f1`
+                  #echo horizon_ip=$HORIZON_IP >> /etc/ansible/hosts
                   sed -i -e 's/KEY----- /KEY-----\n/' -e 's/ -----END/\n-----END/' /root/.ssh/id_rsa
                   sed -i -e '2,2 s/ /\n/g' /root/.ssh/id_rsa
                   cp /root/.ssh/id_rsa /root/key.pem
 
                   export http_proxy=$http_proxy
                   export https_proxy=$https_proxy
-                  export no_proxy=$HORIZON_IP,169.254.169.254
-                  #maybe those should be installed via ansible?
-                  pip install -q --proxy $https_proxy pbr
-                  pip install -q --proxy $https_proxy shade
-                  pip install -q --proxy $https_proxy six --upgrade
+                  export no_proxy=$no_proxy,127.0.0.1,10.0.1.4
+                  #export no_proxy=$HORIZON_IP
+
+                  pip install --proxy $https_proxy pbr
+                  pip install --proxy $https_proxy shade
+                  pip install --proxy $https_proxy six --upgrade
                   #ansible-pull -U $ansible_repo -C $ansible_branch  -f
                   if [ "$?" -ne 0 ]; then
                      senderr "Error configuring server"
@@ -714,7 +727,8 @@ resources:
                   http_proxy=$http_proxy
                   https_proxy=$http_proxy
                   ftp_proxy=$ftp_proxy
-                  ntp_servers=['$ntp_server']
+                  no_proxy=$no_proxy,127.0.0.1,10.0.1.4
+                  ntp_server=['$ntp_server']
                   key_name=$key_name
                   key_name_wait_condition_handle=$wc_notify
                   bosh_subnet_id=$bosh_subnet_id
@@ -738,10 +752,11 @@ resources:
                   docker_broker_security_group=$docker_broker_security_group
                   logsearch_deployment_size=$logsearch_deployment_size
                   logsearch_subnet_id=$logsearch_subnet_id
-                  cloud=openstack
+                  provider=openstack
                   stack=$stack_name
                   stack_id=$stack_id
                   region=RegionOne
+                  availability_zone=nova
             runcmd:
               - /tmp/cloudfoundry.sh
           params:
@@ -753,12 +768,17 @@ resources:
             $http_proxy: { get_param: proxy_http }
             $https_proxy: { get_param: proxy_https }
             $ftp_proxy: { get_param: proxy_ftp }
+            $no_proxy:
+              list_join: [",", { get_param: proxy_no } ]
             $ansible_repo: { get_param: ansible_repo }
             $ansible_branch: { get_param: ansible_branch }
             $wc_notify: { get_attr: ['bastion_wait_condition_handle', 'curl_cli'] }
             $key_name: { get_resource: ssh_key_internal }
             $bosh_subnet_id: { get_resource: bosh_network }
-            $bosh_default_security_groups: { get_resource: secgroup_BOSH }
+            $bosh_default_security_groups:
+              list_join: [' ', [ {get_param: 'OS::stack_name' }, 'BOSH' ]]
+            $bosh_dns:
+              list_join: ["','", { get_param: dns } ]
             $cf_private_subnet_id: { get_resource: cf_network }
             $cf_public_subnet_id: { get_resource: public_network }
             $cf_public_security_group: { get_resource: secgroup_cfPublic }
@@ -779,8 +799,6 @@ resources:
             $logsearch_subnet_id: { get_resource: logsearch_network }
             $stack_name: { get_param: "OS::stack_name" }
             $stack_id: { get_param: "OS::stack_id" }
-            $bosh_dns:
-              list_join: ["','", { get_param: dns } ]
             $ntp_server:
               list_join: ["','", { get_param: ntp } ]
       networks:
