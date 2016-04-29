@@ -700,6 +700,7 @@ resources:
                   export http_proxy=$http_proxy
                   export https_proxy=$https_proxy
                   export no_proxy=$no_proxy,127.0.0.1,10.0.1.4
+                  export HOME=/root
                   #export no_proxy=$HORIZON_IP
 
                   pip install --proxy $https_proxy pbr
