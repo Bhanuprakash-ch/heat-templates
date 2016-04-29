@@ -705,7 +705,7 @@ resources:
                   pip install --proxy $https_proxy pbr
                   pip install --proxy $https_proxy shade
                   pip install --proxy $https_proxy six --upgrade
-                  #ansible-pull -U $ansible_repo -C $ansible_branch  -f
+                  ansible-pull -U $ansible_repo -C $ansible_branch  -f
                   if [ "$?" -ne 0 ]; then
                      senderr "Error configuring server"
                   fi
