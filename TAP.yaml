@@ -782,7 +782,8 @@ resources:
               list_join: ["','", { get_param: dns } ]
             $cf_private_subnet_id: { get_resource: cf_network }
             $cf_public_subnet_id: { get_resource: public_network }
-            $cf_public_security_group: { get_resource: secgroup_cfPublic }
+            $cf_public_security_group:
+              list_join: [' ', [ {get_param: 'OS::stack_name' }, 'cfPublic' ]]
             $cf_password: { get_attr: [ password, value ] }
             $cf_system_domain: { get_param: tap_domain }
             $cf_runner_z1_instances: { get_param: cloudfoundry_runners_count }
@@ -795,7 +796,8 @@ resources:
             $smtp_sender_email: { get_param: smtp_sender_email }
             $smtp_sender_name: { get_param: smtp_sender_name }
             $docker_subnet_id: { get_resource: docker_network }
-            $docker_broker_security_group: { get_resource: secgroup_docker }
+            $docker_broker_security_group:
+              list_join: [' ', [ {get_param: 'OS::stack_name' }, 'Docker' ]]
             $logsearch_deployment_size: { get_param: logsearch_deployment_size }
             $logsearch_subnet_id: { get_resource: logsearch_network }
             $stack_name: { get_param: "OS::stack_name" }
