@@ -790,6 +790,10 @@ resources:
                   ntp_server=['$ntp_server']
                   key_name=$key_name
                   key_name_wait_condition_handle=$wc_notify
+                  bosh_director_wait_condition_handle=none
+                  cf_wait_condition_handle=none
+                  docker_broker_wait_condition_handle=none
+                  nginx_wait_condition_handle=none
                   bosh_subnet_id=$bosh_subnet_id
                   bosh_dns=['$bosh_dns']
                   bosh_default_security_groups=['$bosh_default_security_groups']
@@ -844,7 +848,7 @@ resources:
             $cf_public_security_group:
               list_join: [' ', [ {get_param: 'OS::stack_name' }, 'cfPublic' ]]
             $cf_private_security_group:
-              list_join: [' ', [ {get_param: 'OS::stack_name' }, 'cfPricate' ]]
+              list_join: [' ', [ {get_param: 'OS::stack_name' }, 'cfPrivate' ]]
             $cf_password: { get_attr: [ password, value ] }
             $cf_system_domain: { get_param: tap_domain }
             $cf_runner_z1_instances: { get_param: cloudfoundry_runners_count }
