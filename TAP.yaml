@@ -462,6 +462,18 @@ resources:
           remote_ip_prefix: 10.0.1.0/24
           remote_mode: remote_ip_prefix
           direction: ingress
+        - protocol: icmp
+          remote_ip_prefix: 10.0.2.0/24
+          remote_mode: remote_ip_prefix
+          direction: ingress
+        - protocol: tcp
+          remote_ip_prefix: 10.0.2.0/24
+          remote_mode: remote_ip_prefix
+          direction: ingress
+        - protocol: udp
+          remote_ip_prefix: 10.0.2.0/24
+          remote_mode: remote_ip_prefix
+          direction: ingress
 
   secgroup_cfPublic:
     type: OS::Neutron::SecurityGroup
@@ -493,6 +505,50 @@ resources:
         - protocol: tcp
           port_range_min: 4443
           port_range_max: 4443
+          direction: ingress
+
+  secgroup_cfPrivate:
+    type: OS::Neutron::SecurityGroup
+    properties:
+      name:
+        list_join: [' ', [ {get_param: 'OS::stack_name' }, 'cfPrivate' ]]
+      description: Cloud Foundry Public Group
+      rules:
+        - protocol: icmp
+          direction: egress
+        - protocol: tcp
+          direction: egress
+        - protocol: udp
+          direction: egress
+        - protocol: tcp
+          port_range_min: 22
+          port_range_max: 22
+          remote_group_id: { get_resource: secgroup_bastion_ssh }
+          remote_mode: remote_group_id
+          direction: ingress
+        - protocol: tcp
+          remote_group_id: { get_resource: secgroup_BOSH }
+          remote_mode: remote_group_id
+          direction: ingress
+        - protocol: udp
+          remote_group_id: { get_resource: secgroup_BOSH }
+          remote_mode: remote_group_id
+          direction: ingress
+        - protocol: icmp
+          remote_group_id: { get_resource: secgroup_BOSH }
+          remote_mode: remote_group_id
+          direction: ingress
+        - protocol: icmp
+          remote_ip_prefix: 10.0.2.0/24
+          remote_mode: remote_ip_prefix
+          direction: ingress
+        - protocol: tcp
+          remote_ip_prefix: 10.0.2.0/24
+          remote_mode: remote_ip_prefix
+          direction: ingress
+        - protocol: udp
+          remote_ip_prefix: 10.0.2.0/24
+          remote_mode: remote_ip_prefix
           direction: ingress
 
   secgroup_docker:
@@ -624,7 +680,7 @@ resources:
     type: OS::Heat::WaitCondition
     properties:
       handle: { get_resource: bastion_wait_condition_handle }
-      timeout: 3600
+      timeout: 36000
 
   bastion_wait_condition_handle:
     type: OS::Heat::WaitConditionHandle
@@ -699,13 +755,15 @@ resources:
 
                   export http_proxy=$http_proxy
                   export https_proxy=$https_proxy
-                  export no_proxy=$no_proxy,127.0.0.1,10.0.1.4,.consul
+                  export no_proxy=$no_proxy,127.0.0.1,10.0.1.4,.consul,.intel.com
                   export HOME=/root
                   #export no_proxy=$HORIZON_IP
 
+                  date >> /tmp/time
                   pip install --proxy $https_proxy pbr
                   pip install --proxy $https_proxy shade
                   pip install --proxy $https_proxy six --upgrade
+                  date >> /tmp/time
                   ansible-pull -U $ansible_repo -C $ansible_branch  -f
                   if [ "$?" -ne 0 ]; then
                      senderr "Error configuring server"
@@ -736,6 +794,7 @@ resources:
                   bosh_dns=['$bosh_dns']
                   bosh_default_security_groups=['$bosh_default_security_groups']
                   cf_private_subnet_id=$cf_private_subnet_id
+                  cf_private_security_group=$cf_private_security_group
                   cf_public_subnet_id=$cf_public_subnet_id
                   cf_public_security_group=$cf_public_security_group
                   cf_password=$cf_password
@@ -784,6 +843,8 @@ resources:
             $cf_public_subnet_id: { get_resource: public_network }
             $cf_public_security_group:
               list_join: [' ', [ {get_param: 'OS::stack_name' }, 'cfPublic' ]]
+            $cf_private_security_group:
+              list_join: [' ', [ {get_param: 'OS::stack_name' }, 'cfPricate' ]]
             $cf_password: { get_attr: [ password, value ] }
             $cf_system_domain: { get_param: tap_domain }
             $cf_runner_z1_instances: { get_param: cloudfoundry_runners_count }
