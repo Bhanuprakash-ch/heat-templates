@@ -60,6 +60,7 @@ parameter_groups:
 
 - label: Logsearch Settings
   parameters:
+    - install_logsearch
     - logsearch_deployment_size
 
 - label: SMTP Settings
@@ -233,6 +234,16 @@ parameters:
 ########################################
 # Logsearch settings
 #
+  install_logsearch:
+    label: Install Logsearch
+    type: string
+    default: 'true'
+    description: Enable/Disable Logsearch deployment
+    constraints:
+      - allowed_values:
+        - 'true'
+        - 'false'
+
   logsearch_deployment_size:
     label: Logsearch Deployment Size
     type: string
@@ -826,6 +837,7 @@ resources:
                   cf_smtp_sender_name=$smtp_sender_name
                   docker_subnet_id=$docker_subnet_id
                   docker_broker_security_group=$docker_broker_security_group
+                  install_logsearch=$install_logsearch
                   logsearch_deployment_size=$logsearch_deployment_size
                   logsearch_subnet_id=$logsearch_subnet_id
                   provider=openstack
@@ -875,6 +887,7 @@ resources:
             $docker_subnet_id: { get_resource: docker_network }
             $docker_broker_security_group:
               list_join: [' ', [ {get_param: 'OS::stack_name' }, 'Docker' ]]
+            $install_logsearch: { get_param: install_logsearch }
             $logsearch_deployment_size: { get_param: logsearch_deployment_size }
             $logsearch_subnet_id: { get_resource: logsearch_network }
             $stack_name: { get_param: "OS::stack_name" }
