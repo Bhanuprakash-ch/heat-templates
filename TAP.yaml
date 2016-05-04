@@ -709,6 +709,8 @@ resources:
         stack_id: { get_param: "OS::stack_id" }
         stack_name: { get_param: "OS::stack_name" }
       config_drive: true
+      networks:
+        - port: { get_resource: bastion_port }
       user_data_format: RAW
       user_data:
         str_replace:
@@ -881,8 +883,6 @@ resources:
             $stack_id: { get_param: "OS::stack_id" }
             $ntp_server:
               list_join: ["','", { get_param: ntp } ]
-      networks:
-        - port: { get_resource: bastion_port }
 
   bastion_port:
     type: OS::Neutron::Port
@@ -916,7 +916,7 @@ resources:
       flavor: m1.medium
       name: 
         list_join: ['-', [ {get_param: "OS::stack_name" }, 'Nginx' ]]
-      image: { get_param: centos_image }
+      image: { get_param: ubuntu_image }
       metadata:
         stack_id: { get_param: "OS::stack_id" }
         stack_name: { get_param: "OS::stack_name" }
@@ -925,8 +925,173 @@ resources:
         - port: { get_resource: nginx_port }
       user_data_format: RAW
       user_data:
-        #cloud-config
-        { get_resource: centos_cc }
+        str_replace:
+          template: |
+            #cloud-config
+            #https://bugs.launchpad.net/ubuntu/+source/software-properties/+bug/1433761
+            bootcmd:
+              - http_proxy=$http_proxy https_proxy=$https_proxy add-apt-repository -y ppa:ansible/ansible
+            package_update: true
+            package_upgrade: true
+            apt_http_proxy: $http_proxy
+            apt_https_proxy: $https_proxy
+            apt_ftp_proxy: $ftp_proxy
+            manage_etc_hosts: true
+            packages:
+              - ansible
+              - git
+              - python-pip
+              - autoconf
+              - build-essential
+              - python-dev
+            write_files:
+              - path: /etc/sudoers.d/root
+                permissions: '0440'
+                content: |
+                  Defaults:root	!requiretty
+              - path: /etc/vim/vimrc.local
+                permissions: '0640'
+                content: |
+                  colorscheme desert
+              - path: /etc/openstack/clouds.yaml
+                permissions: '0440'
+                content: |
+                  clouds:
+                    TAP:
+                      auth:
+                        auth_url: $os_api
+                        project_name: $tenant_name
+                        username: $tenant_user
+                        password: $tenant_pass
+              - path: /tmp/cloudfoundry.sh
+                permissions: '0544'
+                content: |
+                  #!/bin/bash
+
+                  function senderr {
+                      $wc_notify --data-binary '{"status": "FAILURE", "reason": "'"$1"'", "data": "'"$2"'"}'
+                      exit 1
+                  }
+
+                  #HORIZON_IP=`awk -F / '/auth_url: / { print $3 }' /etc/openstack/clouds.yaml|cut -d: -f1`
+                  #echo horizon_ip=$HORIZON_IP >> /etc/ansible/hosts
+                  #sed -i -e 's/KEY----- /KEY-----\n/' -e 's/ -----END/\n-----END/' /root/.ssh/id_rsa
+                  #sed -i -e '2,2 s/ /\n/g' /root/.ssh/id_rsa
+                  #cp /root/.ssh/id_rsa /root/key.pem
+
+                  export http_proxy=$http_proxy
+                  export https_proxy=$https_proxy
+                  export no_proxy=$no_proxy,127.0.0.1,10.0.1.4,.consul,.intel.com
+                  export HOME=/root
+                  #export no_proxy=$HORIZON_IP
+
+                  date >> /tmp/time
+                  pip install --proxy $https_proxy pbr
+                  pip install --proxy $https_proxy shade
+                  pip install --proxy $https_proxy six --upgrade
+                  date >> /tmp/time
+                  ansible-pull -U $ansible_repo -C $ansible_branch  -f
+                  if [ "$?" -ne 0 ]; then
+                     senderr "Error configuring server"
+                  fi
+                  date >> /tmp/time
+                  $wc_notify --data-binary '{"status": "SUCCESS"}'
+              - path: /etc/ansible/ansible.cfg
+                content: |
+                  [defaults]
+                  log_path=/var/log/ansible.log
+              - path: /etc/ansible/hosts
+                content: |
+                  [nginx]
+                  localhost ansible_connection=local
+
+                  [nginx:vars]
+                  http_proxy=$http_proxy
+                  https_proxy=$http_proxy
+                  ftp_proxy=$ftp_proxy
+                  no_proxy=$no_proxy,127.0.0.1,10.0.1.4,.consul,.intel.com
+                  ntp_server=['$ntp_server']
+                  key_name=$key_name
+                  key_name_wait_condition_handle=$wc_notify
+                  bosh_director_wait_condition_handle=none
+                  cf_wait_condition_handle=none
+                  docker_broker_wait_condition_handle=none
+                  nginx_wait_condition_handle=none
+                  bosh_subnet_id=$bosh_subnet_id
+                  bosh_dns=['$bosh_dns']
+                  bosh_default_security_groups=['$bosh_default_security_groups']
+                  cf_private_subnet_id=$cf_private_subnet_id
+                  cf_private_security_group=$cf_private_security_group
+                  cf_public_subnet_id=$cf_public_subnet_id
+                  cf_public_security_group=$cf_public_security_group
+                  docker_registry_password=$cf_password
+                  cf_system_domain=$cf_system_domain
+                  cf_runner_z1_instances=$cf_runner_z1_instances
+                  cf_elastic_ip=$cf_elastic_ip
+                  cf_runner_z1_instance_type=$cf_runner_z1_instance_type
+                  cf_smtp_host=$smtp_host
+                  cf_smtp_sender_user=$smtp_user
+                  cf_smtp_password=$smtp_pass
+                  cf_smtp_port=$smtp_port
+                  cf_smtp_sender_email=$smtp_sender_email
+                  cf_smtp_sender_name=$smtp_sender_name
+                  docker_subnet_id=$docker_subnet_id
+                  docker_broker_security_group=$docker_broker_security_group
+                  logsearch_deployment_size=$logsearch_deployment_size
+                  logsearch_subnet_id=$logsearch_subnet_id
+                  provider=openstack
+                  stack=$stack_name
+                  stack_id=$stack_id
+                  region=RegionOne
+                  availability_zone=nova
+            runcmd:
+              - /tmp/cloudfoundry.sh
+          params:
+            $secret_key_pem: { get_attr: [ssh_key_internal, private_key] }
+            $tenant_name: { get_param: tenant_name }
+            $tenant_user: { get_param: tenant_user }
+            $tenant_pass: { get_param: tenant_pass }
+            $os_api: { get_param: os_api }
+            $http_proxy: { get_param: proxy_http }
+            $https_proxy: { get_param: proxy_https }
+            $ftp_proxy: { get_param: proxy_ftp }
+            $no_proxy:
+              list_join: [",", { get_param: proxy_no } ]
+            $ansible_repo: { get_param: ansible_repo }
+            $ansible_branch: { get_param: ansible_branch }
+            $wc_notify: { get_attr: ['bastion_wait_condition_handle', 'curl_cli'] }
+            $key_name: { get_resource: ssh_key_internal }
+            $bosh_subnet_id: { get_resource: bosh_network }
+            $bosh_default_security_groups:
+              list_join: [' ', [ {get_param: 'OS::stack_name' }, 'BOSH' ]]
+            $bosh_dns:
+              list_join: ["','", { get_param: dns } ]
+            $cf_private_subnet_id: { get_resource: cf_network }
+            $cf_public_subnet_id: { get_resource: public_network }
+            $cf_public_security_group:
+              list_join: [' ', [ {get_param: 'OS::stack_name' }, 'cfPublic' ]]
+            $cf_private_security_group:
+              list_join: [' ', [ {get_param: 'OS::stack_name' }, 'cfPrivate' ]]
+            $cf_password: { get_attr: [ password, value ] }
+            $cf_system_domain: { get_param: tap_domain }
+            $cf_runner_z1_instances: { get_param: cloudfoundry_runners_count }
+            $cf_elastic_ip: { get_param: public_ip }
+            $cf_runner_z1_instance_type: { get_param: cloudfoundry_flavor }
+            $smtp_host: { get_param: smtp_host }
+            $smtp_user: { get_param: smtp_user }
+            $smtp_pass: { get_param: smtp_pass }
+            $smtp_port: { get_param: smtp_port }
+            $smtp_sender_email: { get_param: smtp_sender_email }
+            $smtp_sender_name: { get_param: smtp_sender_name }
+            $docker_subnet_id: { get_resource: docker_network }
+            $docker_broker_security_group:
+              list_join: [' ', [ {get_param: 'OS::stack_name' }, 'Docker' ]]
+            $logsearch_deployment_size: { get_param: logsearch_deployment_size }
+            $logsearch_subnet_id: { get_resource: logsearch_network }
+            $stack_name: { get_param: "OS::stack_name" }
+            $stack_id: { get_param: "OS::stack_id" }
+            $ntp_server:
+              list_join: ["','", { get_param: ntp } ]
 
   nginx_port:
     type: OS::Neutron::Port
