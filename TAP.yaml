@@ -71,6 +71,11 @@ parameter_groups:
     - smtp_sender_email
     - smtp_sender_name
 
+- label: Quay Settings
+  parameters:
+    - quay_io_username
+    - quay_io_password
+
 parameters:
 
 ########################################
@@ -277,6 +282,21 @@ parameters:
     label: SMTP sender name
     type: string
     description: SMTP sender name (from name)
+
+########################################
+# Quay settings
+#
+  quay_io_username:
+    label: Quay.io username
+    type: string
+    description: Quay.io username
+    default: ""
+
+  quay_io_password:
+    label: Quay.io password
+    type: string
+    description: Quay.io password
+    default: ""
 
 ########################################
 resources:
@@ -851,9 +871,13 @@ resources:
                   stack_id=$stack_id
                   region=RegionOne
                   availability_zone=nova
+                  quay_io_username=$quay_io_username
+                  quay_io_password=$quay_io_password
+                  router_id=$router_id
             runcmd:
               - /tmp/cloudfoundry.sh
           params:
+            $router_id: { get_resource: router }
             $secret_key_pem: { get_attr: [ssh_key_internal, private_key] }
             $tenant_name: { get_param: tenant_name }
             $tenant_user: { get_param: tenant_user }
@@ -899,6 +923,8 @@ resources:
             $stack_id: { get_param: "OS::stack_id" }
             $ntp_server:
               list_join: ["','", { get_param: ntp } ]
+            $quay_io_username: { get_param: quay_io_username }
+            $quay_io_password: { get_param: quay_io_password }
 
   bastion_port:
     type: OS::Neutron::Port
@@ -1060,8 +1086,6 @@ resources:
                   stack_id=$stack_id
                   region=RegionOne
                   availability_zone=nova
-                  quay_io_username=
-                  quay_io_password=
             runcmd:
               - /tmp/cloudfoundry.sh
           params:
