@@ -1060,6 +1060,8 @@ resources:
                   stack_id=$stack_id
                   region=RegionOne
                   availability_zone=nova
+                  quay_io_username=
+                  quay_io_password=
             runcmd:
               - /tmp/cloudfoundry.sh
           params:
