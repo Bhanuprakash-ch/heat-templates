@@ -539,6 +539,12 @@ resources:
           remote_mode: remote_group_id
           direction: ingress
         - protocol: tcp
+          remote_group_id: { get_resource: secgroup_cfPublic }
+          remote_mode: remote_group_id
+          direction: ingress
+          port_range_min: 80
+          port_range_max: 80
+        - protocol: tcp
           remote_group_id: { get_resource: secgroup_BOSH }
           remote_mode: remote_group_id
           direction: ingress
@@ -576,6 +582,16 @@ resources:
           direction: egress
         - protocol: udp
           direction: egress
+        - protocol: tcp
+          port_range_min: 4243
+          port_range_max: 4243
+          remote_group_id: { get_resource: secgroup_bastion_ssh }
+          remote_mode: remote_group_id
+          direction: ingress
+        - protocol: tcp
+          port_range_min: 5000
+          port_range_max: 5000
+          direction: ingress
         - protocol: tcp
           port_range_min: 32768
           port_range_max: 61000
