@@ -497,6 +497,18 @@ resources:
           remote_ip_prefix: 10.0.4.0/24
           remote_mode: remote_ip_prefix
           direction: ingress
+        - protocol: icmp
+          remote_ip_prefix: 10.0.7.0/24
+          remote_mode: remote_ip_prefix
+          direction: ingress
+        - protocol: tcp
+          remote_ip_prefix: 10.0.7.0/24
+          remote_mode: remote_ip_prefix
+          direction: ingress
+        - protocol: udp
+          remote_ip_prefix: 10.0.7.0/24
+          remote_mode: remote_ip_prefix
+          direction: ingress
 
   secgroup_cfPublic:
     type: OS::Neutron::SecurityGroup
