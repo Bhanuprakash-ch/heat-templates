@@ -432,7 +432,7 @@ resources:
 ########################################
 # Security groups
 #
-  secgroup_bastion_ssh:
+  secgroup_jumpbox_ssh:
     type: OS::Neutron::SecurityGroup
     properties:
       name: 
@@ -466,19 +466,19 @@ resources:
         - protocol: tcp
           port_range_min: 22
           port_range_max: 22
-          remote_group_id: { get_resource: secgroup_bastion_ssh }
+          remote_group_id: { get_resource: secgroup_jumpbox_ssh }
           remote_mode: remote_group_id
           direction: ingress
         - protocol: tcp
           port_range_min: 6868
           port_range_max: 6868
-          remote_group_id: { get_resource: secgroup_bastion_ssh }
+          remote_group_id: { get_resource: secgroup_jumpbox_ssh }
           remote_mode: remote_group_id
           direction: ingress
         - protocol: tcp
           port_range_min: 25555
           port_range_max: 25555
-          remote_group_id: { get_resource: secgroup_bastion_ssh }
+          remote_group_id: { get_resource: secgroup_jumpbox_ssh }
           remote_mode: remote_group_id
           direction: ingress
         - protocol: icmp
@@ -546,7 +546,7 @@ resources:
         - protocol: tcp
           port_range_min: 22
           port_range_max: 22
-          remote_group_id: { get_resource: secgroup_bastion_ssh }
+          remote_group_id: { get_resource: secgroup_jumpbox_ssh }
           remote_mode: remote_group_id
           direction: ingress
         - protocol: tcp
@@ -578,7 +578,7 @@ resources:
         - protocol: tcp
           port_range_min: 22
           port_range_max: 22
-          remote_group_id: { get_resource: secgroup_bastion_ssh }
+          remote_group_id: { get_resource: secgroup_jumpbox_ssh }
           remote_mode: remote_group_id
           direction: ingress
         - protocol: tcp
@@ -628,7 +628,7 @@ resources:
         - protocol: tcp
           port_range_min: 4243
           port_range_max: 4243
-          remote_group_id: { get_resource: secgroup_bastion_ssh }
+          remote_group_id: { get_resource: secgroup_jumpbox_ssh }
           remote_mode: remote_group_id
           direction: ingress
         - protocol: tcp
@@ -684,15 +684,15 @@ resources:
         - protocol: udp
           direction: egress
         - protocol: tcp
-          remote_group_id: { get_resource: secgroup_bastion_ssh }
+          remote_group_id: { get_resource: secgroup_jumpbox_ssh }
           remote_mode: remote_group_id
           direction: ingress
         - protocol: udp
-          remote_group_id: { get_resource: secgroup_bastion_ssh }
+          remote_group_id: { get_resource: secgroup_jumpbox_ssh }
           remote_mode: remote_group_id
           direction: ingress
         - protocol: icmp 
-          remote_group_id: { get_resource: secgroup_bastion_ssh }
+          remote_group_id: { get_resource: secgroup_jumpbox_ssh }
           remote_mode: remote_group_id
           direction: ingress
         - protocol: tcp
@@ -723,7 +723,7 @@ resources:
 ########################################
 # Floating IPs
 #
-  bastion_floating_ip:
+  jumpbox_floating_ip:
     type: OS::Neutron::FloatingIP
     properties:
       floating_network: { get_param: external_network }
@@ -745,18 +745,18 @@ resources:
       sequence: lettersdigits
 
 ########################################
-# Servers / bastion
+# Servers / jumpbox
 #
-  bastion_wait_condition:
+  jumpbox_wait_condition:
     type: OS::Heat::WaitCondition
     properties:
-      handle: { get_resource: bastion_wait_condition_handle }
+      handle: { get_resource: jumpbox_wait_condition_handle }
       timeout: 36000
 
-  bastion_wait_condition_handle:
+  jumpbox_wait_condition_handle:
     type: OS::Heat::WaitConditionHandle
 
-  bastion_server:
+  jumpbox_server:
     type: "OS::Nova::Server"
     properties:
       key_name: { get_param: key_pair }
@@ -769,7 +769,7 @@ resources:
         stack_name: { get_param: "OS::stack_name" }
       config_drive: true
       networks:
-        - port: { get_resource: bastion_port }
+        - port: { get_resource: jumpbox_port }
       user_data_format: RAW
       user_data:
         str_replace:
@@ -918,7 +918,7 @@ resources:
               list_join: [",", { get_param: proxy_no } ]
             $ansible_repo: { get_param: ansible_repo }
             $ansible_branch: { get_param: ansible_branch }
-            $wc_notify: { get_attr: ['bastion_wait_condition_handle', 'curl_cli'] }
+            $wc_notify: { get_attr: ['jumpbox_wait_condition_handle', 'curl_cli'] }
             $key_name: { get_resource: ssh_key_internal }
             $bosh_subnet_id: { get_resource: bosh_network }
             $bosh_default_security_groups:
@@ -955,20 +955,20 @@ resources:
             $quay_io_username: { get_param: quay_io_username }
             $quay_io_password: { get_param: quay_io_password }
 
-  bastion_port:
+  jumpbox_port:
     type: OS::Neutron::Port
     properties:
       network: { get_resource: public_network }
       security_groups:
-        - { get_resource: secgroup_bastion_ssh }
+        - { get_resource: secgroup_jumpbox_ssh }
       fixed_ips:
         - subnet: { get_resource: public_subnet }
 
-  bastion_floating_ip_assoc:
+  jumpbox_floating_ip_assoc:
     type: OS::Neutron::FloatingIPAssociation
     properties:
-      floatingip_id: { get_resource: bastion_floating_ip }
-      port_id: { get_resource: bastion_port }
+      floatingip_id: { get_resource: jumpbox_floating_ip }
+      port_id: { get_resource: jumpbox_port }
 
   centos_cc:
     type: OS::Heat::CloudConfig
@@ -1130,7 +1130,7 @@ resources:
               list_join: [",", { get_param: proxy_no } ]
             $ansible_repo: { get_param: ansible_repo }
             $ansible_branch: { get_param: ansible_branch }
-            $wc_notify: { get_attr: ['bastion_wait_condition_handle', 'curl_cli'] }
+            $wc_notify: { get_attr: ['jumpbox_wait_condition_handle', 'curl_cli'] }
             $key_name: { get_resource: ssh_key_internal }
             $bosh_subnet_id: { get_resource: bosh_network }
             $bosh_default_security_groups:
@@ -1260,9 +1260,9 @@ resources:
 
 ########################################
 outputs:
-  baston_server_ip:
+  jumpbox_server_ip:
     description: IP address of the Application server
-    value: { get_attr: [ bastion_floating_ip, floating_ip_address] }
+    value: { get_attr: [ jumpbox_floating_ip, floating_ip_address] }
 
   console:
     value: 
