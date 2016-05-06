@@ -822,7 +822,10 @@ resources:
                   $wc_notify --data-binary '{"status": "SUCCESS"}'
               - path: /root/.ssh/id_rsa
                 permissions: '0400'
-                content: "$secret_key_pem"
+                content: "$private_key_pem"
+              - path: /root/.ssh/id_rsa.pub
+                permissions: '0400'
+                content: "$public_key_pem"
               - path: /etc/ansible/ansible.cfg
                 content: |
                   [defaults]
@@ -878,7 +881,8 @@ resources:
               - /tmp/cloudfoundry.sh
           params:
             $router_id: { get_resource: router }
-            $secret_key_pem: { get_attr: [ssh_key_internal, private_key] }
+            $private_key_pem: { get_attr: [ssh_key_internal, private_key] }
+            $public_key_pem: { get_attr: [ssh_key_internal, public_key] }
             $tenant_name: { get_param: tenant_name }
             $tenant_user: { get_param: tenant_user }
             $tenant_pass: { get_param: tenant_pass }
