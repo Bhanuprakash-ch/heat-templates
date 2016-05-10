@@ -220,11 +220,10 @@ parameters:
   cloudera_flavor:
     label: Cloudera Servers Size
     type: string
-    default: m1.medium
+    default: m1.large
     description: Server size for the Hadoop Cluster server
     constraints:
       - allowed_values:
-        - m1.medium
         - m1.large
         - m1.xlarge
 
@@ -1237,7 +1236,7 @@ resources:
     type: "OS::Nova::Server"
     properties:
       key_name: { get_resource: ssh_key_internal }
-      flavor: m1.medium
+      flavor: m1.xlarge
       name: 
         list_join: ['-', [ {get_param: "OS::stack_name" }, 'Cloudera-Manager' ]]
       image: { get_param: centos_image }
