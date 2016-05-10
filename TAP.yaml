@@ -862,7 +862,7 @@ resources:
                   http_proxy=$http_proxy
                   https_proxy=$http_proxy
                   ftp_proxy=$ftp_proxy
-                  no_proxy=$no_proxy,127.0.0.1,10.0.1.4,.consul,.intel.com
+                  no_proxy=$no_proxy,127.0.0.1,10.0.1.4,.consul,.intel.com,10.0.4.4
                   ntp_server=['$ntp_server']
                   key_name=$key_name
                   key_name_wait_condition_handle=$wc_notify
