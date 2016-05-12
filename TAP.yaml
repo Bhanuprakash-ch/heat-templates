@@ -173,18 +173,14 @@ parameters:
   centos_image:
     type: string
     label: CentOS VM Image
-    default: centos-6-official
     constraints:
-      - allowed_values:
-        - centos-6-official
+      - custom_constraint: glance.image
 
   ubuntu_image:
     type: string
     label: Ubuntu VM Image
-    default: ubuntu-trusty
     constraints:
-      - allowed_values:
-        - ubuntu-trusty
+      - custom_constraint: glance.image
 
   key_pair:
     type: string
@@ -241,7 +237,7 @@ parameters:
   install_logsearch:
     label: Install Logsearch
     type: string
-    default: 'true'
+    default: 'false'
     description: Enable/Disable Logsearch deployment
     constraints:
       - allowed_values:
@@ -480,6 +476,12 @@ resources:
           remote_group_id: { get_resource: secgroup_jumpbox_ssh }
           remote_mode: remote_group_id
           direction: ingress
+        - protocol: tcp
+          remote_group_id: { get_resource: secgroup_cfPublic }
+          remote_mode: remote_group_id
+          direction: ingress
+          port_range_min: 80
+          port_range_max: 80
         - protocol: icmp
           remote_ip_prefix: 10.0.1.0/24
           remote_mode: remote_ip_prefix
@@ -744,17 +746,47 @@ resources:
       sequence: lettersdigits
 
 ########################################
-# Servers / jumpbox
+# Wait conditions
 #
-  jumpbox_wait_condition:
+  cf_wait_condition:
     type: OS::Heat::WaitCondition
     properties:
-      handle: { get_resource: jumpbox_wait_condition_handle }
+      handle: { get_resource: cf_wait_condition_handle }
       timeout: 36000
 
-  jumpbox_wait_condition_handle:
+  cf_wait_condition_handle:
     type: OS::Heat::WaitConditionHandle
 
+  nginx_wait_condition:
+    type: OS::Heat::WaitCondition
+    properties:
+      handle: { get_resource: nginx_wait_condition_handle }
+      timeout: 36000
+
+  nginx_wait_condition_handle:
+    type: OS::Heat::WaitConditionHandle
+
+  docker_broker_wait_condition:
+    type: OS::Heat::WaitCondition
+    properties:
+      handle: { get_resource: docker_broker_wait_condition_handle }
+      timeout: 36000
+
+  docker_broker_wait_condition_handle:
+    type: OS::Heat::WaitConditionHandle
+
+  bosh_director_wait_condition:
+    type: OS::Heat::WaitCondition
+    properties:
+      handle: { get_resource: bosh_director_wait_condition_handle }
+      timeout: 36000
+
+  bosh_director_wait_condition_handle:
+    type: OS::Heat::WaitConditionHandle
+
+########################################
+# Servers / jumpbox
+#
   jumpbox_server:
     type: "OS::Nova::Server"
     properties:
@@ -814,34 +846,17 @@ resources:
                 content: |
                   #!/bin/bash
                   
-                  function senderr {
-                      $wc_notify --data-binary '{"status": "FAILURE", "reason": "'"$1"'", "data": "'"$2"'"}'
-                      exit 1
-                  }
-
-                  #HORIZON_IP=`awk -F / '/auth_url: / { print $3 }' /etc/openstack/clouds.yaml|cut -d: -f1`
-                  #echo horizon_ip=$HORIZON_IP >> /etc/ansible/hosts
                   sed -i -e 's/KEY----- /KEY-----\n/' -e 's/ -----END/\n-----END/' /root/.ssh/id_rsa
                   sed -i -e '2,2 s/ /\n/g' /root/.ssh/id_rsa
                   cp /root/.ssh/id_rsa /root/key.pem
-
                   export http_proxy=$http_proxy
                   export https_proxy=$https_proxy
-                  export no_proxy=$no_proxy,127.0.0.1,10.0.1.4,.consul,.intel.com
+                  export no_proxy=$no_proxy
                   export HOME=/root
-                  #export no_proxy=$HORIZON_IP
-
-                  date >> /tmp/time
                   pip install --proxy $https_proxy pbr
                   pip install --proxy $https_proxy shade
                   pip install --proxy $https_proxy six --upgrade
-                  date >> /tmp/time
                   ansible-pull -U $ansible_repo -C $ansible_branch  -f
-                  if [ "$?" -ne 0 ]; then
-                     senderr "Error configuring server"
-                  fi
-                  date >> /tmp/time
-                  $wc_notify --data-binary '{"status": "SUCCESS"}'
               - path: /root/.ssh/id_rsa
                 permissions: '0400'
                 content: "$private_key_pem"
@@ -861,14 +876,12 @@ resources:
                   http_proxy=$http_proxy
                   https_proxy=$http_proxy
                   ftp_proxy=$ftp_proxy
-                  no_proxy=$no_proxy,127.0.0.1,10.0.1.4,.consul,.intel.com,10.0.4.4
+                  no_proxy=$no_proxy
                   ntp_server=['$ntp_server']
                   key_name=$key_name
-                  key_name_wait_condition_handle=$wc_notify
-                  bosh_director_wait_condition_handle=none
-                  cf_wait_condition_handle=none
-                  docker_broker_wait_condition_handle=none
-                  nginx_wait_condition_handle=none
+                  cf_wait_condition_handle=$cf_wait_condition_handle
+                  docker_broker_wait_condition_handle=$docker_broker_wait_condition_handle
+                  bosh_director_wait_condition_handle=$bosh_director_wait_condition_handle
                   bosh_subnet_id=$bosh_subnet_id
                   bosh_dns=['$bosh_dns']
                   bosh_default_security_groups=['$bosh_default_security_groups']
@@ -917,7 +930,9 @@ resources:
               list_join: [",", { get_param: proxy_no } ]
             $ansible_repo: { get_param: ansible_repo }
             $ansible_branch: { get_param: ansible_branch }
-            $wc_notify: { get_attr: ['jumpbox_wait_condition_handle', 'curl_cli'] }
+            $cf_wait_condition_handle: { get_attr: ['cf_wait_condition_handle', 'curl_cli'] }
+            $docker_broker_wait_condition_handle: { get_attr: ['docker_broker_wait_condition_handle', 'curl_cli'] }
+            $bosh_director_wait_condition_handle: { get_attr: ['bosh_director_wait_condition_handle', 'curl_cli'] }
             $key_name: { get_resource: ssh_key_internal }
             $bosh_subnet_id: { get_resource: bosh_network }
             $bosh_default_security_groups:
@@ -1033,39 +1048,18 @@ resources:
                         project_name: $tenant_name
                         username: $tenant_user
                         password: $tenant_pass
-              - path: /tmp/cloudfoundry.sh
+              - path: /tmp/nginx.sh
                 permissions: '0544'
                 content: |
                   #!/bin/bash
-
-                  function senderr {
-                      $wc_notify --data-binary '{"status": "FAILURE", "reason": "'"$1"'", "data": "'"$2"'"}'
-                      exit 1
-                  }
-
-                  #HORIZON_IP=`awk -F / '/auth_url: / { print $3 }' /etc/openstack/clouds.yaml|cut -d: -f1`
-                  #echo horizon_ip=$HORIZON_IP >> /etc/ansible/hosts
-                  #sed -i -e 's/KEY----- /KEY-----\n/' -e 's/ -----END/\n-----END/' /root/.ssh/id_rsa
-                  #sed -i -e '2,2 s/ /\n/g' /root/.ssh/id_rsa
-                  #cp /root/.ssh/id_rsa /root/key.pem
-
                   export http_proxy=$http_proxy
                   export https_proxy=$https_proxy
-                  export no_proxy=$no_proxy,127.0.0.1,10.0.1.4,.consul,.intel.com
+                  export no_proxy=$no_proxy
                   export HOME=/root
-                  #export no_proxy=$HORIZON_IP
-
-                  date >> /tmp/time
                   pip install --proxy $https_proxy pbr
                   pip install --proxy $https_proxy shade
                   pip install --proxy $https_proxy six --upgrade
-                  date >> /tmp/time
                   ansible-pull -U $ansible_repo -C $ansible_branch  -f
-                  if [ "$?" -ne 0 ]; then
-                     senderr "Error configuring server"
-                  fi
-                  date >> /tmp/time
-                  $wc_notify --data-binary '{"status": "SUCCESS"}'
               - path: /etc/ansible/ansible.cfg
                 content: |
                   [defaults]
@@ -1079,43 +1073,19 @@ resources:
                   http_proxy=$http_proxy
                   https_proxy=$http_proxy
                   ftp_proxy=$ftp_proxy
-                  no_proxy=$no_proxy,127.0.0.1,10.0.1.4,.consul,.intel.com
-                  ntp_server=['$ntp_server']
-                  key_name=$key_name
-                  key_name_wait_condition_handle=$wc_notify
-                  bosh_director_wait_condition_handle=none
-                  cf_wait_condition_handle=none
-                  docker_broker_wait_condition_handle=none
-                  nginx_wait_condition_handle=none
-                  bosh_subnet_id=$bosh_subnet_id
-                  bosh_dns=['$bosh_dns']
-                  bosh_default_security_groups=['$bosh_default_security_groups']
+                  no_proxy=$no_proxy
+                  nginx_wait_condition_handle=$nginx_wait_condition_handle
                   cf_private_subnet_id=$cf_private_subnet_id
-                  cf_private_security_group=$cf_private_security_group
-                  cf_public_subnet_id=$cf_public_subnet_id
-                  cf_public_security_group=$cf_public_security_group
-                  docker_registry_password=$cf_password
+                  docker_registry_password=$docker_registry_password
                   cf_system_domain=$cf_system_domain
-                  cf_runner_z1_instances=$cf_runner_z1_instances
-                  cf_elastic_ip=$cf_elastic_ip
-                  cf_runner_z1_instance_type=$cf_runner_z1_instance_type
-                  cf_smtp_host=$smtp_host
-                  cf_smtp_sender_user=$smtp_user
-                  cf_smtp_password=$smtp_pass
-                  cf_smtp_port=$smtp_port
-                  cf_smtp_sender_email=$smtp_sender_email
-                  cf_smtp_sender_name=$smtp_sender_name
                   docker_subnet_id=$docker_subnet_id
-                  docker_broker_security_group=$docker_broker_security_group
-                  logsearch_deployment_size=$logsearch_deployment_size
-                  logsearch_subnet_id=$logsearch_subnet_id
                   provider=openstack
                   stack=$stack_name
                   stack_id=$stack_id
                   region=RegionOne
                   availability_zone=nova
             runcmd:
-              - /tmp/cloudfoundry.sh
+              - /tmp/nginx.sh
           params:
             $secret_key_pem: { get_attr: [ssh_key_internal, private_key] }
             $tenant_name: { get_param: tenant_name }
@@ -1129,39 +1099,13 @@ resources:
               list_join: [",", { get_param: proxy_no } ]
             $ansible_repo: { get_param: ansible_repo }
             $ansible_branch: { get_param: ansible_branch }
-            $wc_notify: { get_attr: ['jumpbox_wait_condition_handle', 'curl_cli'] }
-            $key_name: { get_resource: ssh_key_internal }
-            $bosh_subnet_id: { get_resource: bosh_network }
-            $bosh_default_security_groups:
-              list_join: [' ', [ {get_param: 'OS::stack_name' }, 'BOSH' ]]
-            $bosh_dns:
-              list_join: ["','", { get_param: dns } ]
             $cf_private_subnet_id: { get_resource: cf_network }
-            $cf_public_subnet_id: { get_resource: public_network }
-            $cf_public_security_group:
-              list_join: [' ', [ {get_param: 'OS::stack_name' }, 'cfPublic' ]]
-            $cf_private_security_group:
-              list_join: [' ', [ {get_param: 'OS::stack_name' }, 'cfPrivate' ]]
-            $cf_password: { get_attr: [ password, value ] }
             $cf_system_domain: { get_param: tap_domain }
-            $cf_runner_z1_instances: { get_param: cloudfoundry_runners_count }
-            $cf_elastic_ip: { get_param: public_ip }
-            $cf_runner_z1_instance_type: { get_param: cloudfoundry_flavor }
-            $smtp_host: { get_param: smtp_host }
-            $smtp_user: { get_param: smtp_user }
-            $smtp_pass: { get_param: smtp_pass }
-            $smtp_port: { get_param: smtp_port }
-            $smtp_sender_email: { get_param: smtp_sender_email }
-            $smtp_sender_name: { get_param: smtp_sender_name }
+            $docker_registry_password: { get_attr: [ password, value ] }
             $docker_subnet_id: { get_resource: docker_network }
-            $docker_broker_security_group:
-              list_join: [' ', [ {get_param: 'OS::stack_name' }, 'Docker' ]]
-            $logsearch_deployment_size: { get_param: logsearch_deployment_size }
-            $logsearch_subnet_id: { get_resource: logsearch_network }
             $stack_name: { get_param: "OS::stack_name" }
             $stack_id: { get_param: "OS::stack_id" }
-            $ntp_server:
-              list_join: ["','", { get_param: ntp } ]
+            $nginx_wait_condition_handle: { get_attr: ['nginx_wait_condition_handle', 'curl_cli'] }
 
   nginx_port:
     type: OS::Neutron::Port
