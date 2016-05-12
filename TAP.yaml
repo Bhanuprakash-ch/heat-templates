@@ -562,7 +562,7 @@ resources:
           port_range_min: 4443
           port_range_max: 4443
           direction: ingress
-
+#TODO: remove secgroup_cfPrivate
   secgroup_cfPrivate:
     type: OS::Neutron::SecurityGroup
     properties:
