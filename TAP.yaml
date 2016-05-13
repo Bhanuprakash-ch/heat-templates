@@ -563,6 +563,7 @@ resources:
           port_range_max: 4443
           direction: ingress
 
+
   secgroup_docker:
     type: OS::Neutron::SecurityGroup
     properties:
@@ -742,8 +743,7 @@ resources:
     properties:
       key_name: { get_param: key_pair }
       flavor: m1.medium
-      name: 
-        list_join: ['-', [ {get_param: "OS::stack_name" }, 'JumpBox' ]]
+      name: Jump Box
       image: { get_param: ubuntu_image }
       metadata:
         stack_id: { get_param: "OS::stack_id" }
@@ -949,8 +949,7 @@ resources:
     properties:
       key_name: { get_resource: ssh_key_internal }
       flavor: m1.medium
-      name: 
-        list_join: ['-', [ {get_param: "OS::stack_name" }, 'Nginx' ]]
+      name: NGINX
       image: { get_param: ubuntu_image }
       metadata:
         stack_id: { get_param: "OS::stack_id" }
@@ -1085,8 +1084,7 @@ resources:
         properties:
           key_name: { get_resource: ssh_key_internal }
           flavor: { get_param: cloudera_flavor }
-          name:
-            list_join: ['-', [ {get_param: "OS::stack_name" }, 'Cloudera-Master' ]]
+          name: Cloudera-Master
           image: { get_param: centos_image }
           metadata:
             stack_id: { get_param: "OS::stack_id" }
@@ -1111,8 +1109,7 @@ resources:
         properties:
           key_name: { get_resource: ssh_key_internal }
           flavor: { get_param: cloudera_flavor }
-          name:
-            list_join: ['-', [ {get_param: "OS::stack_name" }, 'Cloudera-Worker' ]]
+          name: Cloudera-Worker
           image: { get_param: centos_image }
           metadata:
             stack_id: { get_param: "OS::stack_id" }
@@ -1131,8 +1128,7 @@ resources:
     properties:
       key_name: { get_resource: ssh_key_internal }
       flavor: m1.xlarge
-      name: 
-        list_join: ['-', [ {get_param: "OS::stack_name" }, 'Cloudera-Manager' ]]
+      name: Cloudera-Manager
       image: { get_param: centos_image }
       metadata:
         stack_id: { get_param: "OS::stack_id" }
