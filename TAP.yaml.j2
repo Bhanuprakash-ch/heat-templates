@@ -63,6 +63,7 @@ parameter_groups:
     - cloudera_cidr
     - cloudera_masters
     - cloudera_workers
+    - cloudera_storage_paths
 {% endif %}
 
 - label: Logsearch Settings
@@ -253,6 +254,11 @@ parameters:
     label: Cloudera Workers
     type: comma_delimited_list
     description: List of Cloudera Workers IPs separated by commas
+
+  cloudera_storage_paths:
+    label: Cloudera Storage Path
+    type: comma_delimited_list
+    description: List of data mountpoints on bare metal servers separated by commas. DO NOT ADD LEADING SLASH
 {% endif %}
 ########################################
 # Logsearch settings
@@ -930,6 +936,7 @@ resources:
                   cloudera_cidr=$cloudera_cidr
                   cloudera_masters=$cloudera_masters
                   cloudera_workers=$cloudera_workers
+                  cloudera_storage_paths=['$cloudera_storage_paths']
                   {% endif %}
             runcmd:
               - /tmp/cloudfoundry.sh
@@ -941,6 +948,8 @@ resources:
               list_join: [",", { get_param: cloudera_masters } ]
             $cloudera_workers:
               list_join: [",", { get_param: cloudera_workers } ]
+            $cloudera_storage_paths:
+              list_join: ["','", { get_param: cloudera_storage_paths } ]
 {% endif %}
             $router_id: { get_resource: router }
             $private_key_pem: { get_attr: [ssh_key_internal, private_key] }
