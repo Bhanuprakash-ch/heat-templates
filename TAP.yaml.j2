@@ -1090,7 +1090,7 @@ resources:
                   export https_proxy=$https_proxy
                   export no_proxy=$no_proxy
                   export HOME=/root
-                  pip install --proxy $https_proxy pbr
+                  pip install --proxy $https_proxy pbr pytz
                   pip install --proxy $https_proxy shade
                   pip install --proxy $https_proxy six --upgrade
                   ansible-pull -U $ansible_repo -C $ansible_branch  -f
