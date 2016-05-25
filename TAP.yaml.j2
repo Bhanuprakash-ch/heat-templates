@@ -204,10 +204,12 @@ parameters:
   cloudfoundry_flavor:
     label: CF Server Size
     type: string
-    default: m1.medium
-    description: Server size for Cloud Foundry servers
+    description: Server size for Cloud Foundry servers. Recommended 16GB RAM or more.
+    default: m1.xlarge
     constraints:
       - allowed_values:
+        - m1.xlarge
+        - m1.large
         - m1.medium
 
   cloudfoundry_runners_count:
@@ -225,12 +227,9 @@ parameters:
   cloudera_flavor:
     label: Cloudera Servers Size
     type: string
-    default: m1.large
     description: Server size for the Hadoop Cluster server
     constraints:
-      - allowed_values:
-        - m1.large
-        - m1.xlarge
+      - custom_constraint: nova.flavor
 
   cloudera_workers_count:
     label: CDH Workers count
@@ -871,7 +870,7 @@ resources:
                   export https_proxy=$https_proxy
                   export no_proxy=$no_proxy
                   export HOME=/root
-                  pip install --proxy $https_proxy pbr
+                  pip install --proxy $https_proxy pbr pytz
                   pip install --proxy $https_proxy shade
                   pip install --proxy $https_proxy six --upgrade
                   ansible-pull -U $ansible_repo -C $ansible_branch  -f
@@ -1090,7 +1089,7 @@ resources:
                   export https_proxy=$https_proxy
                   export no_proxy=$no_proxy
                   export HOME=/root
-                  pip install --proxy $https_proxy pbr
+                  pip install --proxy $https_proxy pbr pytz
                   pip install --proxy $https_proxy shade
                   pip install --proxy $https_proxy six --upgrade
                   ansible-pull -U $ansible_repo -C $ansible_branch  -f
