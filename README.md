@@ -2,13 +2,17 @@
 Heat Templates
 
 
-### Requirements
-- virtualenv
+## Requirements
+
+### Ubuntu/Debian
+- python-virtualenv
+- python-dev
+- python-pip
 
 ```
 virtualenv tap
 . tap/bin/activate
-./tap/bin/pip install j2cli
+pip install -r requirements.txt
 ```
 
 ### Generate OpenStack Heat template (FullVM)

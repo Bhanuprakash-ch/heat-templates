@@ -1,0 +1,9 @@
+Jinja2==2.8
+MarkupSafe==0.23
+argparse==1.2.1
+docopt==0.6.2
+j2cli==0.3.1-0
+pipreqs==0.4.2
+requests==2.10.0
+wsgiref==0.1.2
+yarg==0.1.9
