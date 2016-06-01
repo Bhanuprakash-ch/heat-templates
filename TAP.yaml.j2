@@ -870,9 +870,12 @@ resources:
                   export https_proxy=$https_proxy
                   export no_proxy=$no_proxy
                   export HOME=/root
-                  pip install --proxy $https_proxy pbr pytz
-                  pip install --proxy $https_proxy shade
-                  pip install --proxy $https_proxy six --upgrade
+                  if [ -n "$https_proxy" ]; then
+                    pip_proxy="--proxy $https_proxy"
+                  fi
+                  pip install $pip_proxy pbr pytz
+                  pip install $pip_proxy shade
+                  pip install $pip_proxy six --upgrade
                   ansible-pull -U $ansible_repo -C $ansible_branch  -f
               - path: /root/.ssh/id_rsa
                 permissions: '0400'
@@ -1089,9 +1092,12 @@ resources:
                   export https_proxy=$https_proxy
                   export no_proxy=$no_proxy
                   export HOME=/root
-                  pip install --proxy $https_proxy pbr pytz
-                  pip install --proxy $https_proxy shade
-                  pip install --proxy $https_proxy six --upgrade
+                  if [ -n "$https_proxy" ]; then
+                    pip_proxy="--proxy $https_proxy"
+                  fi
+                  pip install $pip_proxy pbr pytz
+                  pip install $pip_proxy shade
+                  pip install $pip_proxy six --upgrade
                   ansible-pull -U $ansible_repo -C $ansible_branch  -f
               - path: /etc/ansible/ansible.cfg
                 content: |
