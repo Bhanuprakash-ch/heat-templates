@@ -809,7 +809,7 @@ resources:
     type: "OS::Nova::Server"
     properties:
       key_name: { get_param: key_pair }
-      flavor: m1.medium
+      flavor: m1.small
       name: Jump Box
       image: { get_param: ubuntu_image }
       metadata:
