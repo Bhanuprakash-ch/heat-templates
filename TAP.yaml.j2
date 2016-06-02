@@ -833,12 +833,13 @@ resources:
             apt_ftp_proxy: $ftp_proxy
             manage_etc_hosts: true
             packages:
-              - ansible
               - git
               - python-pip
               - autoconf
               - build-essential
               - python-dev
+              - libffi-dev
+              - libssl-dev
             write_files:
               - path: /etc/sudoers.d/root
                 permissions: '0440'
@@ -873,9 +874,8 @@ resources:
                   if [ -n "$https_proxy" ]; then
                     pip_proxy="--proxy $https_proxy"
                   fi
-                  pip install $pip_proxy pbr pytz
-                  pip install $pip_proxy shade
-                  pip install $pip_proxy six --upgrade
+                  pip install -I $pip_proxy shade==1.8.0
+                  pip install -I $pip_proxy ansible==2.0.2.0
                   ansible-pull -U $ansible_repo -C $ansible_branch  -f
               - path: /root/.ssh/id_rsa
                 permissions: '0400'
@@ -1059,12 +1059,13 @@ resources:
             apt_ftp_proxy: $ftp_proxy
             manage_etc_hosts: true
             packages:
-              - ansible
               - git
               - python-pip
               - autoconf
               - build-essential
               - python-dev
+              - libffi-dev
+              - libssl-dev
             write_files:
               - path: /etc/sudoers.d/root
                 permissions: '0440'
@@ -1095,9 +1096,8 @@ resources:
                   if [ -n "$https_proxy" ]; then
                     pip_proxy="--proxy $https_proxy"
                   fi
-                  pip install $pip_proxy pbr pytz
-                  pip install $pip_proxy shade
-                  pip install $pip_proxy six --upgrade
+                  pip install -I $pip_proxy shade==1.8.0
+                  pip install -I $pip_proxy ansible==2.0.2.0
                   ansible-pull -U $ansible_repo -C $ansible_branch  -f
               - path: /etc/ansible/ansible.cfg
                 content: |
