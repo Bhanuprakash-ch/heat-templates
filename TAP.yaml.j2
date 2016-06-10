@@ -13,6 +13,9 @@
 # limitations under the License.
 
 ---
+{% if type is not defined or type != 'hybrid' -%}
+  {% set type = 'fullvm' -%}
+{% endif -%}
 
 heat_template_version: 2015-04-30
 
