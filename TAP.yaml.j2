@@ -40,7 +40,6 @@ parameter_groups:
     - ntp
     - proxy_http
     - proxy_https
-    - proxy_ftp
     - proxy_no
     - public_ip
     - tap_domain
@@ -113,6 +112,9 @@ parameters:
     type: string
     label: OpenStack identity API URL
     description: OpenStack identity API URL
+    constraints:
+      - allowed_pattern: ^(https?):\/\/[a-z0-9-]+(\.[a-z0-9-]+)+(\:[0-9]+)?(\/v[0-9\.]+)$
+        description: API URL must start with http or https and end with /v2.0 or /v3
 
 ########################################
 #TAP release settings
@@ -140,43 +142,56 @@ parameters:
     description: DNS Server IP
 
   ntp:
-    type: comma_delimited_list
+    type: string
     label: NTP Server
-    description: NTP Server IP
+    description: NTP Server IP or domain comma delimited list
+    constraints:
+      - allowed_pattern: ^([a-z0-9-_]+(\.[a-z0-9-_]+)+(\:[0-9]+)?(\ *,\ *)?)+$
+        description: NTP Server must be a valid comma delimited list of domain name or IP
 
   proxy_http:
     type: string
     label: HTTP Proxy
     description: HTTP Proxy for Internet access
     default: ""
+    constraints:
+      - allowed_pattern: (^$|^http:\/\/[a-z0-9-_]+(\.[a-z0-9-_]+)+(\:[0-9]+)?$)
+        description: HTTP Proxy must be a valid domain name or IP (begin with http:// and it can end with port number)
+
 
   proxy_https:
     type: string
     label: HTTPS Proxy
     description: HTTPS Proxy for Internet access
     default: ""
-
-  proxy_ftp:
-    type: string
-    label: FTP Proxy
-    description: FTP Proxy for Internet access
-    default: ""
+    constraints:
+      - allowed_pattern: (^$|^(https?):\/\/[a-z0-9-_]+(\.[a-z0-9-_]+)+(\:[0-9]+)?$)
+        description: HTTP Proxy must be a valid domain name or IP (begin with http:// or https:// and it can end with port number)
 
   proxy_no:
-    type: comma_delimited_list
+    type: string
     label: No Proxy
     description: List of comma separated IPs or domains that should by accessed without proxy server
     default: ""
+    constraints:
+      - allowed_pattern: (^$|^(([a-z0-9-_\.]+)+(\ *,\ *)?)+$)
+        description: No Proxy must be a valid comma delimited list of domain name or IP
 
   public_ip:
     type: string
     label: Public IP
     description: Public IP for TAP installation
+    constraints:
+      - allowed_pattern: ^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$
+        description: Public IP must be a valid IP address
 
   tap_domain:
     type: string
     label: TAP Domain
     description: Domain from TAP installation
+    constraints:
+      - allowed_pattern: ^([a-zA-Z0-9]+((-|_)[a-zA-Z0-9]+)*\.)+[a-zA-Z]{2,}$
+        description: TAP Domain must be a valid domain name
 
 ########################################
 # OpenStack Settings
@@ -246,21 +261,33 @@ parameters:
     label: Cloudera Servers CIDR
     type: string
     description: Cloudera servers subnet in CIDR format
+    constraints:
+      - allowed_pattern: ^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)/[0-9]{1,2}$
+        description: Cloudera Servers CIDR must be a valid CIDR
 
   cloudera_masters:
     label: Cloudera Masters
-    type: comma_delimited_list
+    type: string
     description: List of Cloudera Masters IPs separated by commas, last server will by also the Manager
+    constraints:
+      - allowed_pattern: ^([a-z0-9-]+(\.[a-z0-9-]+)+(\:[0-9]+)?(\ *,\ *)?)+$
+        description: Cloudera Masters must be a valid comma delimited list of IP
 
   cloudera_workers:
     label: Cloudera Workers
-    type: comma_delimited_list
+    type: string
     description: List of Cloudera Workers IPs separated by commas
+    constraints:
+      - allowed_pattern: ^([a-z0-9-]+(\.[a-z0-9-]+)+(\:[0-9]+)?(\ *,\ *)?)+$
+        description: Cloudera Workers must be a valid comma delimited list of IP
 
   cloudera_storage_paths:
     label: Cloudera Storage Path
-    type: comma_delimited_list
+    type: string
     description: List of data mountpoints on bare metal servers separated by commas. DO NOT ADD LEADING SLASH
+    constraints:
+      - allowed_pattern: ^([^\s\/]+([^\s\/]\/[^\s\/]+)?(\ *,\ *)?)+$
+        description: Cloudera Storage Path must be a valid comma delimited list of data mountpoints without leading slashes
 {% endif %}
 ########################################
 # Logsearch settings
@@ -292,6 +319,9 @@ parameters:
     label: SMTP Host
     type: string
     description: SMTP Server hostname or IP address
+    constraints:
+      - allowed_pattern: ^[a-z0-9-]+(\.[a-z0-9-_]+)+$
+        description: SMTP Host must be a valid domain or IP address
 
   smtp_user:
     label: SMTP Username
@@ -309,11 +339,17 @@ parameters:
     label: SMTP Port
     type: string
     description: SMTP Server port
+    constraints:
+      - allowed_pattern: ^[0-9]+$
+        description: SMTP Port must be a valid smtp port number
 
   smtp_sender_email:
     label: SMTP sender E-mail
     type: string
     description: SMTP sender E-Mail address (from address)
+    constraints:
+      - allowed_pattern: ^[\w!#$%&\'*+/=?`{|}~^-]+(?:\.[\w!#$%&\'*+/=?`{|}~^-]+)*@(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,6}$
+        description: SMTP sender E-mail must be a valid E-mail address
 
   smtp_sender_name:
     label: SMTP sender name
@@ -833,7 +869,6 @@ resources:
             package_upgrade: true
             apt_http_proxy: $http_proxy
             apt_https_proxy: $https_proxy
-            apt_ftp_proxy: $ftp_proxy
             manage_etc_hosts: true
             packages:
               - git
@@ -898,7 +933,6 @@ resources:
                   [jump-boxes:vars]
                   http_proxy=$http_proxy
                   https_proxy=$http_proxy
-                  ftp_proxy=$ftp_proxy
                   no_proxy=$no_proxy
                   ntp_server=['$ntp_server']
                   key_name=$key_name
@@ -949,12 +983,9 @@ resources:
 {% if (type == 'hybrid') %}
             $docker_fp: { get_attr: [ docker_floating_ip, floating_ip_address ] }
             $cloudera_cidr: { get_param: cloudera_cidr }
-            $cloudera_masters:
-              list_join: [",", { get_param: cloudera_masters } ]
-            $cloudera_workers:
-              list_join: [",", { get_param: cloudera_workers } ]
-            $cloudera_storage_paths:
-              list_join: ["','", { get_param: cloudera_storage_paths } ]
+            $cloudera_masters: { get_param: cloudera_masters }
+            $cloudera_workers: { get_param: cloudera_workers }
+            $cloudera_storage_paths: { get_param: cloudera_storage_paths }
 {% endif %}
             $router_id: { get_resource: router }
             $private_key_pem: { get_attr: [ssh_key_internal, private_key] }
@@ -965,9 +996,7 @@ resources:
             $os_api: { get_param: os_api }
             $http_proxy: { get_param: proxy_http }
             $https_proxy: { get_param: proxy_https }
-            $ftp_proxy: { get_param: proxy_ftp }
-            $no_proxy:
-              list_join: [",", { get_param: proxy_no } ]
+            $no_proxy: { get_param: proxy_no }
             $ansible_repo: { get_param: ansible_repo }
             $ansible_branch: { get_param: ansible_branch }
             $cf_wait_condition_handle: { get_attr: ['cf_wait_condition_handle', 'curl_cli'] }
@@ -1004,8 +1033,7 @@ resources:
             $logsearch_subnet_id: { get_resource: logsearch_network }
             $stack_name: { get_param: "OS::stack_name" }
             $stack_id: { get_param: "OS::stack_id" }
-            $ntp_server:
-              list_join: ["','", { get_param: ntp } ]
+            $ntp_server: { get_param: ntp }
             $quay_io_username: { get_param: quay_io_username }
             $quay_io_password: { get_param: quay_io_password }
 
@@ -1059,7 +1087,6 @@ resources:
             package_upgrade: true
             apt_http_proxy: $http_proxy
             apt_https_proxy: $https_proxy
-            apt_ftp_proxy: $ftp_proxy
             manage_etc_hosts: true
             packages:
               - git
@@ -1114,7 +1141,6 @@ resources:
                   [nginx:vars]
                   http_proxy=$http_proxy
                   https_proxy=$http_proxy
-                  ftp_proxy=$ftp_proxy
                   no_proxy=$no_proxy
                   nginx_wait_condition_handle=$nginx_wait_condition_handle
                   cf_private_subnet_id=$cf_private_subnet_id
@@ -1136,9 +1162,7 @@ resources:
             $os_api: { get_param: os_api }
             $http_proxy: { get_param: proxy_http }
             $https_proxy: { get_param: proxy_https }
-            $ftp_proxy: { get_param: proxy_ftp }
-            $no_proxy:
-              list_join: [",", { get_param: proxy_no } ]
+            $no_proxy: { get_param: proxy_no }
             $ansible_repo: { get_param: ansible_repo }
             $ansible_branch: { get_param: ansible_branch }
             $cf_private_subnet_id: { get_resource: cf_network }
