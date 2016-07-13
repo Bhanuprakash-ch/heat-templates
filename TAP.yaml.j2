@@ -914,7 +914,13 @@ resources:
                   fi
                   pip install -I $pip_proxy shade==1.8.0
                   pip install -I $pip_proxy ansible==2.0.2.0
-                  ansible-pull -U $ansible_repo -C $ansible_branch  -f
+                  LOOP=1
+                  while [ $LOOP ]
+                  do
+                    ansible-pull -U $ansible_repo -C $ansible_branch  -f
+                    LOOP=$?
+                    sleep 60
+                  done
               - path: /root/.ssh/id_rsa
                 permissions: '0400'
                 content: "$private_key_pem"
@@ -1128,7 +1134,13 @@ resources:
                   fi
                   pip install -I $pip_proxy shade==1.8.0
                   pip install -I $pip_proxy ansible==2.0.2.0
-                  ansible-pull -U $ansible_repo -C $ansible_branch  -f
+                  LOOP=1
+                  while [ $LOOP ]
+                  do
+                    ansible-pull -U $ansible_repo -C $ansible_branch  -f
+                    LOOP=$?
+                    sleep 60
+                  done
               - path: /etc/ansible/ansible.cfg
                 content: |
                   [defaults]
