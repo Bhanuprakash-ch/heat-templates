@@ -915,7 +915,7 @@ resources:
                   pip install -I $pip_proxy shade==1.8.0
                   pip install -I $pip_proxy ansible==2.0.2.0
                   LOOP=1
-                  while [ $LOOP ]
+                  while [ "$LOOP" -ne 0 ]
                   do
                     ansible-pull -U $ansible_repo -C $ansible_branch  -f
                     LOOP=$?
@@ -1135,7 +1135,7 @@ resources:
                   pip install -I $pip_proxy shade==1.8.0
                   pip install -I $pip_proxy ansible==2.0.2.0
                   LOOP=1
-                  while [ $LOOP ]
+                  while [ "$LOOP" -ne 0 ]
                   do
                     ansible-pull -U $ansible_repo -C $ansible_branch  -f
                     LOOP=$?
