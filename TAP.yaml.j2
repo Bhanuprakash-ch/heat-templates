@@ -902,7 +902,7 @@ resources:
                         project_name: $tenant_name
                         username: $tenant_user
                         password: $tenant_pass
-              - path: /tmp/cloudfoundry.sh
+              - path: /opt/tap.sh
                 permissions: '0544'
                 content: |
                   #!/bin/bash
@@ -989,7 +989,7 @@ resources:
                   cloudera_storage_paths=['$cloudera_storage_paths']
 {%- endif %}
             runcmd:
-              - /tmp/cloudfoundry.sh
+              - /opt/tap.sh
           params:
 {%- if (type == 'hybrid') %}
             $docker_fp: { get_attr: [ docker_floating_ip, floating_ip_address ] }
@@ -1126,7 +1126,7 @@ resources:
                         project_name: $tenant_name
                         username: $tenant_user
                         password: $tenant_pass
-              - path: /tmp/nginx.sh
+              - path: /opt/tap.sh
                 permissions: '0544'
                 content: |
                   #!/bin/bash
@@ -1170,7 +1170,7 @@ resources:
                   region=RegionOne
                   availability_zone=nova
             runcmd:
-              - /tmp/nginx.sh
+              - /opt/tap.sh
           params:
             $secret_key_pem: { get_attr: [ssh_key_internal, private_key] }
             $tenant_name: { get_param: tenant_name }
