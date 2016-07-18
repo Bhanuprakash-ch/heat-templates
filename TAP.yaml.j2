@@ -48,9 +48,10 @@ parameter_groups:
   parameters:
     - key_pair
     - ubuntu_image
-{% if (type == 'fullvm') %}
+{%- if (type == 'fullvm') %}
     - centos_image
-{% endif %}
+{%- endif %}
+
 - label: Cloud Foundry Settings
   parameters:
     - cloudfoundry_flavor
@@ -58,15 +59,15 @@ parameter_groups:
 
 - label: Cloudera Settings
   parameters:
-{% if (type == 'fullvm') %}
+{%- if (type == 'fullvm') %}
     - cloudera_flavor
     - cloudera_workers_count
-{% elif (type == 'hybrid') %}
+{%- elif (type == 'hybrid') %}
     - cloudera_cidr
     - cloudera_masters
     - cloudera_workers
     - cloudera_storage_paths
-{% endif %}
+{%- endif %}
 
 - label: Logsearch Settings
   parameters:
@@ -158,7 +159,6 @@ parameters:
       - allowed_pattern: (^$|^http:\/\/[a-z0-9-_]+(\.[a-z0-9-_]+)+(\:[0-9]+)?$)
         description: HTTP Proxy must be a valid domain name or IP (begin with http:// and it can end with port number)
 
-
   proxy_https:
     type: string
     label: HTTPS Proxy
@@ -196,13 +196,13 @@ parameters:
 ########################################
 # OpenStack Settings
 #                   
-{% if (type == 'fullvm') %}
+{%- if (type == 'fullvm') %}
   centos_image:
     type: string
     label: CentOS VM Image
     constraints:
       - custom_constraint: glance.image
-{% endif %}
+{%- endif %}
   ubuntu_image:
     type: string
     label: Ubuntu VM Image
@@ -241,7 +241,7 @@ parameters:
 ########################################
 # Cloudera settings
 #
-{% if (type == 'fullvm') %}
+{%- if (type == 'fullvm') %}
   cloudera_flavor:
     label: Cloudera Servers Size
     type: string
@@ -256,7 +256,7 @@ parameters:
     description: Numbers of CDH Workers servers
     constraints:
       - range: { min: 3, max: 12 }
-{% elif (type == 'hybrid') %}
+{%- elif (type == 'hybrid') %}
   cloudera_cidr:
     label: Cloudera Servers CIDR
     type: string
@@ -288,7 +288,8 @@ parameters:
     constraints:
       - allowed_pattern: ^([^\s\/]+([^\s\/]\/[^\s\/]+)?(\ *,\ *)?)+$
         description: Cloudera Storage Path must be a valid comma delimited list of data mountpoints without leading slashes
-{% endif %}
+{%- endif %}
+
 ########################################
 # Logsearch settings
 #
@@ -472,7 +473,8 @@ resources:
     properties:
       router_id: { get_resource: router }
       subnet: { get_resource: logsearch_subnet }
-{% if (type == 'fullvm') %}
+
+{%- if (type == 'fullvm') %}
   cdh_network:
     type: OS::Neutron::Net
 
@@ -490,7 +492,8 @@ resources:
     properties:
       router_id: { get_resource: router }
       subnet: { get_resource: cloudera_subnet }
-{% endif %}
+{%- endif %}
+
 ########################################
 # Security groups
 #
@@ -603,7 +606,7 @@ resources:
           remote_group_id: { get_resource: secgroup_jumpbox_ssh }
           remote_mode: remote_group_id
           direction: ingress
-{% if (type == 'hybrid') %}
+{%- if (type == 'hybrid') %}
         - protocol: icmp
           remote_ip_prefix: { get_param: cloudera_cidr }
           remote_mode: remote_ip_prefix
@@ -616,7 +619,7 @@ resources:
           remote_ip_prefix: { get_param: cloudera_cidr }
           remote_mode: remote_ip_prefix
           direction: ingress
-{% endif %}
+{%- endif %}
 
   secgroup_cfPublic:
     type: OS::Neutron::SecurityGroup
@@ -650,7 +653,6 @@ resources:
           port_range_max: 4443
           direction: ingress
 
-
   secgroup_docker:
     type: OS::Neutron::SecurityGroup
     properties:
@@ -682,7 +684,7 @@ resources:
           port_range_min: 32768
           port_range_max: 61000
           direction: ingress
-{% if (type == 'hybrid') %}
+{%- if (type == 'hybrid') %}
         - protocol: icmp
           remote_ip_prefix: { get_param: cloudera_cidr }
           remote_mode: remote_ip_prefix
@@ -695,8 +697,9 @@ resources:
           remote_ip_prefix: { get_param: cloudera_cidr }
           remote_mode: remote_ip_prefix
           direction: ingress
-{% endif %}
-{% if (type == 'fullvm') %}
+{%- endif %}
+
+{%- if (type == 'fullvm') %}
   secgroup_consul:
     type: OS::Neutron::SecurityGroup
     properties:
@@ -772,7 +775,8 @@ resources:
           remote_ip_prefix: 10.0.5.0/24
           remote_mode: remote_ip_prefix
           direction: ingress
-{% endif %}
+{%- endif %}
+
 ########################################
 # Floating IPs
 #
@@ -780,12 +784,13 @@ resources:
     type: OS::Neutron::FloatingIP
     properties:
       floating_network: { get_param: external_network }
-{% if (type == 'hybrid') %}
+{%- if (type == 'hybrid') %}
   docker_floating_ip:
     type: OS::Neutron::FloatingIP
     properties:
       floating_network: { get_param: external_network }
-{% endif %}
+{%- endif %}
+
 ########################################
 # SSH Keys
 #
@@ -976,23 +981,23 @@ resources:
                   quay_io_username=$quay_io_username
                   quay_io_password=$quay_io_password
                   router_id=$router_id
-{% if (type == 'hybrid') %}
+{%- if (type == 'hybrid') %}
                   docker_fp=$docker_fp
                   cloudera_cidr=$cloudera_cidr
                   cloudera_masters=$cloudera_masters
                   cloudera_workers=$cloudera_workers
                   cloudera_storage_paths=['$cloudera_storage_paths']
-                  {% endif %}
+{%- endif %}
             runcmd:
               - /tmp/cloudfoundry.sh
           params:
-{% if (type == 'hybrid') %}
+{%- if (type == 'hybrid') %}
             $docker_fp: { get_attr: [ docker_floating_ip, floating_ip_address ] }
             $cloudera_cidr: { get_param: cloudera_cidr }
             $cloudera_masters: { get_param: cloudera_masters }
             $cloudera_workers: { get_param: cloudera_workers }
             $cloudera_storage_paths: { get_param: cloudera_storage_paths }
-{% endif %}
+{%- endif %}
             $router_id: { get_resource: router }
             $private_key_pem: { get_attr: [ssh_key_internal, private_key] }
             $public_key_pem: { get_attr: [ssh_key_internal, public_key] }
@@ -1200,7 +1205,7 @@ resources:
       InstanceId: { get_resource: nginx_server }
       NetworkInterfaceId: { get_resource: nginx_port }
 
-{% if (type == 'fullvm') %}
+{%- if (type == 'fullvm') %}
 ########################################
 # Servers / cdh-masters
 #
@@ -1276,7 +1281,8 @@ resources:
         - { get_resource: secgroup_consul }
       fixed_ips:
         - subnet: { get_resource: cloudera_subnet }
-{% endif %}
+{%- endif %}
+
 ########################################
 outputs:
   jumpbox_server_ip:
