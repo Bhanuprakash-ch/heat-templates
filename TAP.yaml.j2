@@ -847,69 +847,69 @@ resources:
     type: OS::Heat::WaitConditionHandle
 
 ########################################
-# Servers / jumpbox
+# Software Config/Cloud Config
 #
-  jumpbox_server:
-    type: "OS::Nova::Server"
+
+  cc_ubuntu_config:
+    type: "OS::Heat::CloudConfig"
     properties:
-      key_name: { get_param: key_pair }
-      flavor: m1.small
-      name: Jump Box
-      image: { get_param: ubuntu_image }
-      metadata:
-        stack_id: { get_param: "OS::stack_id" }
-        stack_name: { get_param: "OS::stack_name" }
-      config_drive: true
-      networks:
-        - port: { get_resource: jumpbox_port }
-      user_data_format: RAW
-      user_data:
+      cloud_config:
+        package_upgrade: true
+        package_update: true
+        apt_http_proxy: { get_param: proxy_http }
+        apt_https_proxy: { get_param: proxy_https }
+        manage_etc_hosts: true
+        packages:
+          - python-pip
+          - git
+          - autoconf
+          - build-essential
+          - python-dev
+          - libffi-dev
+          - libssl-dev
+         
+  cc_config_files:
+    type: "OS::Heat::CloudConfig"
+    properties:
+      cloud_config:
+        merge_how: 'dict(recurse_array,no_replace)+list(append)'
+        write_files:
+          - path: /etc/sudoers.d/root
+            permissions: '0440'
+            content: |
+              Defaults:root	!requiretty
+          - path: /etc/vim/vimrc.local
+            permissions: '0640'
+            content: |
+              colorscheme desert
+          - path: /etc/ansible/ansible.cfg
+            content: |
+              [defaults]
+              log_path=/var/log/ansible.log
+          - path: /etc/openstack/clouds.yaml
+            permissions: '0440'
+            content: 
+              clouds:
+                TAP:
+                  auth:
+                    auth_url: { get_param: os_api }
+                    project_name: { get_param: tenant_name }
+                    username: { get_param: tenant_user }
+                    password: { get_param: tenant_pass }
+
+  cc_provision_script:
+    type: "OS::Heat::SoftwareConfig"
+    properties:
+      config:
         str_replace:
           template: |
-            #cloud-config
-            #https://bugs.launchpad.net/ubuntu/+source/software-properties/+bug/1433761
-            bootcmd:
-              - http_proxy=$http_proxy https_proxy=$https_proxy add-apt-repository -y ppa:ansible/ansible
-            package_update: true
-            package_upgrade: true
-            apt_http_proxy: $http_proxy
-            apt_https_proxy: $https_proxy
-            manage_etc_hosts: true
-            packages:
-              - git
-              - python-pip
-              - autoconf
-              - build-essential
-              - python-dev
-              - libffi-dev
-              - libssl-dev
+            #cloud_config
+            merge_how: 'dict(recurse_array,no_replace)+list(append)'
             write_files:
-              - path: /etc/sudoers.d/root
-                permissions: '0440'
-                content: |
-                  Defaults:root	!requiretty
-              - path: /etc/vim/vimrc.local
-                permissions: '0640'
-                content: |
-                  colorscheme desert
-              - path: /etc/openstack/clouds.yaml
-                permissions: '0440'
-                content: |
-                  clouds:
-                    TAP:
-                      auth:
-                        auth_url: $os_api
-                        project_name: $tenant_name
-                        username: $tenant_user
-                        password: $tenant_pass
               - path: /opt/tap.sh
                 permissions: '0544'
                 content: |
                   #!/bin/bash
-                  
-                  sed -i -e 's/KEY----- /KEY-----\n/' -e 's/ -----END/\n-----END/' /root/.ssh/id_rsa
-                  sed -i -e '2,2 s/ /\n/g' /root/.ssh/id_rsa
-                  cp /root/.ssh/id_rsa /root/key.pem
                   export http_proxy=$http_proxy
                   export https_proxy=$https_proxy
                   export no_proxy=$no_proxy
@@ -926,127 +926,186 @@ resources:
                     LOOP=$?
                     sleep 60
                   done
-              - path: /root/.ssh/id_rsa
-                permissions: '0400'
-                content: "$private_key_pem"
-              - path: /root/.ssh/id_rsa.pub
-                permissions: '0400'
-                content: "$public_key_pem"
-              - path: /etc/ansible/ansible.cfg
-                content: |
-                  [defaults]
-                  log_path=/var/log/ansible.log
-              - path: /etc/ansible/hosts
-                content: |
-                  [jump-boxes]
-                  localhost ansible_connection=local
-
-                  [jump-boxes:vars]
-                  http_proxy=$http_proxy
-                  https_proxy=$http_proxy
-                  no_proxy=$no_proxy
-                  ntp_server=['$ntp_server']
-                  key_name=$key_name
-                  cf_wait_condition_handle=$cf_wait_condition_handle
-                  docker_broker_wait_condition_handle=$docker_broker_wait_condition_handle
-                  bosh_director_wait_condition_handle=$bosh_director_wait_condition_handle
-                  bosh_subnet_id=$bosh_subnet_id
-                  bosh_dns=['$bosh_dns']
-                  bosh_default_security_groups=['$bosh_default_security_groups']
-                  cf_private_subnet_id=$cf_private_subnet_id
-                  cf_private_security_group=$cf_private_security_group
-                  cf_public_subnet_id=$cf_public_subnet_id
-                  cf_public_security_group=$cf_public_security_group
-                  cf_password=$cf_password
-                  cf_system_domain=$cf_system_domain
-                  cf_runner_z1_instances=$cf_runner_z1_instances
-                  cf_elastic_ip=$cf_elastic_ip
-                  cf_runner_z1_instance_type=$cf_runner_z1_instance_type
-                  cf_smtp_host=$smtp_host
-                  cf_smtp_sender_user=$smtp_user
-                  cf_smtp_password=$smtp_pass
-                  cf_smtp_port=$smtp_port
-                  cf_smtp_sender_email=$smtp_sender_email
-                  cf_smtp_sender_name=$smtp_sender_name
-                  docker_subnet_id=$docker_subnet_id
-                  docker_broker_security_group=$docker_broker_security_group
-                  install_logsearch=$install_logsearch
-                  logsearch_deployment_size=$logsearch_deployment_size
-                  logsearch_subnet_id=$logsearch_subnet_id
-                  provider=openstack
-                  stack=$stack_name
-                  stack_id=$stack_id
-                  region=RegionOne
-                  availability_zone=nova
-                  quay_io_username=$quay_io_username
-                  quay_io_password=$quay_io_password
-                  router_id=$router_id
-{%- if (type == 'hybrid') %}
-                  docker_fp=$docker_fp
-                  cloudera_cidr=$cloudera_cidr
-                  cloudera_masters=$cloudera_masters
-                  cloudera_workers=$cloudera_workers
-                  cloudera_storage_paths=['$cloudera_storage_paths']
-{%- endif %}
-            runcmd:
-              - /opt/tap.sh
           params:
-{%- if (type == 'hybrid') %}
-            $docker_fp: { get_attr: [ docker_floating_ip, floating_ip_address ] }
-            $cloudera_cidr: { get_param: cloudera_cidr }
-            $cloudera_masters: { get_param: cloudera_masters }
-            $cloudera_workers: { get_param: cloudera_workers }
-            $cloudera_storage_paths: { get_param: cloudera_storage_paths }
-{%- endif %}
-            $router_id: { get_resource: router }
-            $private_key_pem: { get_attr: [ssh_key_internal, private_key] }
-            $public_key_pem: { get_attr: [ssh_key_internal, public_key] }
-            $tenant_name: { get_param: tenant_name }
-            $tenant_user: { get_param: tenant_user }
-            $tenant_pass: { get_param: tenant_pass }
-            $os_api: { get_param: os_api }
             $http_proxy: { get_param: proxy_http }
             $https_proxy: { get_param: proxy_https }
             $no_proxy: { get_param: proxy_no }
             $ansible_repo: { get_param: ansible_repo }
             $ansible_branch: { get_param: ansible_branch }
-            $cf_wait_condition_handle: { get_attr: ['cf_wait_condition_handle', 'curl_cli'] }
-            $docker_broker_wait_condition_handle: { get_attr: ['docker_broker_wait_condition_handle', 'curl_cli'] }
-            $bosh_director_wait_condition_handle: { get_attr: ['bosh_director_wait_condition_handle', 'curl_cli'] }
-            $key_name: { get_resource: ssh_key_internal }
-            $bosh_subnet_id: { get_resource: bosh_network }
-            $bosh_default_security_groups:
-              list_join: [' ', [ {get_param: 'OS::stack_name' }, 'BOSH' ]]
-            $bosh_dns:
-              list_join: ["','", { get_param: dns } ]
-            $cf_private_subnet_id: { get_resource: cf_network }
-            $cf_public_subnet_id: { get_resource: public_network }
-            $cf_public_security_group:
-              list_join: [' ', [ {get_param: 'OS::stack_name' }, 'cfPublic' ]]
-            $cf_private_security_group:
-              list_join: [' ', [ {get_param: 'OS::stack_name' }, 'cfPrivate' ]]
-            $cf_password: { get_attr: [ password, value ] }
-            $cf_system_domain: { get_param: tap_domain }
-            $cf_runner_z1_instances: { get_param: cloudfoundry_runners_count }
-            $cf_elastic_ip: { get_param: public_ip }
-            $cf_runner_z1_instance_type: { get_param: cloudfoundry_flavor }
-            $smtp_host: { get_param: smtp_host }
-            $smtp_user: { get_param: smtp_user }
-            $smtp_pass: { get_param: smtp_pass }
-            $smtp_port: { get_param: smtp_port }
-            $smtp_sender_email: { get_param: smtp_sender_email }
-            $smtp_sender_name: { get_param: smtp_sender_name }
-            $docker_subnet_id: { get_resource: docker_network }
-            $docker_broker_security_group:
-              list_join: [' ', [ {get_param: 'OS::stack_name' }, 'Docker' ]]
-            $install_logsearch: { get_param: install_logsearch }
-            $logsearch_deployment_size: { get_param: logsearch_deployment_size }
-            $logsearch_subnet_id: { get_resource: logsearch_network }
-            $stack_name: { get_param: "OS::stack_name" }
-            $stack_id: { get_param: "OS::stack_id" }
-            $ntp_server: { get_param: ntp }
-            $quay_io_username: { get_param: quay_io_username }
-            $quay_io_password: { get_param: quay_io_password }
+
+  cc_internal_key:
+    type: "OS::Heat::CloudConfig"
+    properties:
+      cloud_config:
+        merge_how: 'dict(recurse_array,no_replace)+list(append)'
+        write_files:
+          - path: /root/.ssh/id_rsa
+            permissions: '0400'
+            content: { get_attr: [ssh_key_internal, private_key] }
+          - path: /root/key.pem
+            permissions: '0400'
+            content: { get_attr: [ssh_key_internal, private_key] }
+          - path: /root/.ssh/id_rsa.pub
+            permissions: '0400'
+            content: { get_attr: [ssh_key_internal, public_key] }
+
+  cc_jumpbox_facts:
+    type: "OS::Heat::CloudConfig"
+    properties:
+      cloud_config:
+        merge_how: 'dict(recurse_array,no_replace)+list(append)'
+        write_files:
+          - path: /etc/ansible/group_vars/jump-boxes
+            permissions: '0440'
+            content:
+{%- if (type == 'hybrid') %}                    
+              docker_fp: { get_attr: [ docker_floating_ip, floating_ip_address ] }
+              cloudera_cidr: { get_param: cloudera_cidr }
+              cloudera_masters: { get_param: cloudera_masters }
+              cloudera_workers: { get_param: cloudera_workers }
+              cloudera_storage_paths: { get_param: cloudera_storage_paths }
+{%- endif %}                      
+              router_id: { get_resource: router }
+              http_proxy: { get_param: proxy_http }  
+              https_proxy: { get_param: proxy_https }  
+              no_proxy: { get_param: proxy_no }  
+              cf_wait_condition_handle: { get_attr: ['cf_wait_condition_handle', 'curl_cli'] }  
+              docker_broker_wait_condition_handle: { get_attr: ['docker_broker_wait_condition_handle', 'curl_cli'] }  
+              bosh_director_wait_condition_handle: { get_attr: ['bosh_director_wait_condition_handle', 'curl_cli'] }  
+              key_name: { get_resource: ssh_key_internal }  
+              bosh_subnet_id: { get_resource: bosh_network }  
+              bosh_default_security_groups: 
+                - list_join: [' ', [ {get_param: 'OS::stack_name' }, 'BOSH' ]]  
+              bosh_dns:  
+                - list_join: [',', { get_param: dns } ]  
+              ntp_server: 
+                - { get_param: ntp }
+              cf_private_subnet_id: { get_resource: cf_network }
+              cf_public_subnet_id: { get_resource: public_network }
+              cf_public_security_group:
+                list_join: [' ', [ {get_param: 'OS::stack_name' }, 'cfPublic' ]]
+              cf_private_security_group:
+                list_join: [' ', [ {get_param: 'OS::stack_name' }, 'cfPrivate' ]]
+              cf_password: { get_attr: [ password, value ] }
+              cf_system_domain: { get_param: tap_domain }
+              cf_runner_z1_instances: { get_param: cloudfoundry_runners_count }
+              cf_elastic_ip: { get_param: public_ip }
+              cf_runner_z1_instance_type: { get_param: cloudfoundry_flavor }
+              cf_smtp_host: { get_param: smtp_host }
+              cf_smtp_sender_user: { get_param: smtp_user }
+              cf_smtp_password: { get_param: smtp_pass }
+              cf_smtp_port: { get_param: smtp_port }
+              cf_smtp_sender_email: { get_param: smtp_sender_email }
+              cf_smtp_sender_name: { get_param: smtp_sender_name }
+              docker_subnet_id: { get_resource: docker_network }
+              docker_broker_security_group:
+                list_join: [' ', [ {get_param: 'OS::stack_name' }, 'Docker' ]]
+              install_logsearch: { get_param: install_logsearch }
+              logsearch_deployment_size: { get_param: logsearch_deployment_size }
+              logsearch_subnet_id: { get_resource: logsearch_network }
+              stack: { get_param: "OS::stack_name" }
+              stack_id: { get_param: "OS::stack_id" }
+              quay_io_username: { get_param: quay_io_username }
+              quay_io_password: { get_param: quay_io_password }
+              provider: openstack
+              region: RegionOne
+              availability_zone: nova
+              
+  cc_nginx_facts:
+    type: "OS::Heat::CloudConfig"
+    properties:
+      cloud_config:
+        merge_how: 'dict(recurse_array,no_replace)+list(append)'
+        write_files:
+          - path: /etc/ansible/group_vars/nginx
+            permissions: '0440'
+            content:
+              http_proxy: { get_param: proxy_http }  
+              https_proxy: { get_param: proxy_https }  
+              no_proxy: { get_param: proxy_no }  
+              nginx_wait_condition_handle: { get_attr: ['nginx_wait_condition_handle', 'curl_cli'] }
+              cf_private_subnet_id: { get_resource: cf_network }
+              docker_registry_password: { get_attr: [ password, value ] }
+              cf_system_domain: { get_param: tap_domain }
+              docker_subnet_id: { get_resource: docker_network }
+              stack: { get_param: "OS::stack_name" }
+              stack_id: { get_param: "OS::stack_id" }
+              provider: openstack
+              region: RegionOne
+              availability_zone: nova
+
+  cc_jumpbox_hosts:
+    type: "OS::Heat::CloudConfig"
+    properties:
+      cloud_config:
+        merge_how: 'dict(recurse_array,no_replace)+list(append)'
+        write_files:
+          - path: /etc/ansible/hosts
+            content: |
+              [jump-boxes]
+              localhost ansible_connection=local
+              #jump-boxes:vars were moved to /etc/ansible/group_vars/jump-boxes
+
+  cc_nginx_hosts:
+    type: "OS::Heat::CloudConfig"
+    properties:
+      cloud_config:
+        merge_how: 'dict(recurse_array,no_replace)+list(append)'
+        write_files:
+          - path: /etc/ansible/hosts
+            content: |
+              [nginx]
+              localhost ansible_connection=local
+              #nginx:vars were moved to /etc/ansible/group_vars/nginx
+
+  cc_runcmd:
+    type: "OS::Heat::CloudConfig"
+    properties:
+      cloud_config:
+        runcmd:
+          - /opt/tap.sh
+
+  cc_jumpbox:
+    type: "OS::Heat::MultipartMime"
+    properties:
+      parts:
+      - config: { get_resource: cc_ubuntu_config }
+      - config: { get_resource: cc_config_files }
+      - config: { get_resource: cc_internal_key }
+      - config: { get_resource: cc_jumpbox_facts }
+      - config: { get_resource: cc_jumpbox_hosts }
+      - { config: { get_resource: cc_provision_script }, type: "text", subtype: "cloud-config" }
+      - config: { get_resource: cc_runcmd }
+ 
+  cc_nginx:
+    type: "OS::Heat::MultipartMime"
+    properties:
+      parts:
+      - config: { get_resource: cc_ubuntu_config }
+      - config: { get_resource: cc_config_files }
+      - config: { get_resource: cc_nginx_facts }
+      - config: { get_resource: cc_nginx_hosts }
+      - { config: { get_resource: cc_provision_script }, type: "text", subtype: "cloud-config" }
+      - config: { get_resource: cc_runcmd }
+        
+########################################
+# Servers / jumpbox
+#
+  jumpbox_server:
+    type: "OS::Nova::Server"
+    properties:
+      key_name: { get_param: key_pair }
+      flavor: m1.small
+      name: Jump Box
+      image: { get_param: ubuntu_image }
+      metadata:
+        stack_id: { get_param: "OS::stack_id" }
+        stack_name: { get_param: "OS::stack_name" }
+      config_drive: true
+      networks:
+        - port: { get_resource: jumpbox_port }
+      user_data_format: RAW
+      user_data: { get_resource: cc_jumpbox }
 
   jumpbox_port:
     type: OS::Neutron::Port
@@ -1087,108 +1146,7 @@ resources:
       networks:
         - port: { get_resource: nginx_port }
       user_data_format: RAW
-      user_data:
-        str_replace:
-          template: |
-            #cloud-config
-            #https://bugs.launchpad.net/ubuntu/+source/software-properties/+bug/1433761
-            bootcmd:
-              - http_proxy=$http_proxy https_proxy=$https_proxy add-apt-repository -y ppa:ansible/ansible
-            package_update: true
-            package_upgrade: true
-            apt_http_proxy: $http_proxy
-            apt_https_proxy: $https_proxy
-            manage_etc_hosts: true
-            packages:
-              - git
-              - python-pip
-              - autoconf
-              - build-essential
-              - python-dev
-              - libffi-dev
-              - libssl-dev
-            write_files:
-              - path: /etc/sudoers.d/root
-                permissions: '0440'
-                content: |
-                  Defaults:root	!requiretty
-              - path: /etc/vim/vimrc.local
-                permissions: '0640'
-                content: |
-                  colorscheme desert
-              - path: /etc/openstack/clouds.yaml
-                permissions: '0440'
-                content: |
-                  clouds:
-                    TAP:
-                      auth:
-                        auth_url: $os_api
-                        project_name: $tenant_name
-                        username: $tenant_user
-                        password: $tenant_pass
-              - path: /opt/tap.sh
-                permissions: '0544'
-                content: |
-                  #!/bin/bash
-                  export http_proxy=$http_proxy
-                  export https_proxy=$https_proxy
-                  export no_proxy=$no_proxy
-                  export HOME=/root
-                  if [ -n "$https_proxy" ]; then
-                    pip_proxy="--proxy $https_proxy"
-                  fi
-                  pip install -I $pip_proxy shade==1.8.0
-                  pip install -I $pip_proxy ansible==2.0.2.0
-                  LOOP=1
-                  while [ "$LOOP" -ne 0 ]
-                  do
-                    ansible-pull -U $ansible_repo -C $ansible_branch  -f
-                    LOOP=$?
-                    sleep 60
-                  done
-              - path: /etc/ansible/ansible.cfg
-                content: |
-                  [defaults]
-                  log_path=/var/log/ansible.log
-              - path: /etc/ansible/hosts
-                content: |
-                  [nginx]
-                  localhost ansible_connection=local
-
-                  [nginx:vars]
-                  http_proxy=$http_proxy
-                  https_proxy=$http_proxy
-                  no_proxy=$no_proxy
-                  nginx_wait_condition_handle=$nginx_wait_condition_handle
-                  cf_private_subnet_id=$cf_private_subnet_id
-                  docker_registry_password=$docker_registry_password
-                  cf_system_domain=$cf_system_domain
-                  docker_subnet_id=$docker_subnet_id
-                  provider=openstack
-                  stack=$stack_name
-                  stack_id=$stack_id
-                  region=RegionOne
-                  availability_zone=nova
-            runcmd:
-              - /opt/tap.sh
-          params:
-            $secret_key_pem: { get_attr: [ssh_key_internal, private_key] }
-            $tenant_name: { get_param: tenant_name }
-            $tenant_user: { get_param: tenant_user }
-            $tenant_pass: { get_param: tenant_pass }
-            $os_api: { get_param: os_api }
-            $http_proxy: { get_param: proxy_http }
-            $https_proxy: { get_param: proxy_https }
-            $no_proxy: { get_param: proxy_no }
-            $ansible_repo: { get_param: ansible_repo }
-            $ansible_branch: { get_param: ansible_branch }
-            $cf_private_subnet_id: { get_resource: cf_network }
-            $cf_system_domain: { get_param: tap_domain }
-            $docker_registry_password: { get_attr: [ password, value ] }
-            $docker_subnet_id: { get_resource: docker_network }
-            $stack_name: { get_param: "OS::stack_name" }
-            $stack_id: { get_param: "OS::stack_id" }
-            $nginx_wait_condition_handle: { get_attr: ['nginx_wait_condition_handle', 'curl_cli'] }
+      user_data: { get_resource: cc_nginx }
 
   nginx_port:
     type: OS::Neutron::Port
