@@ -867,7 +867,71 @@ resources:
           - python-dev
           - libffi-dev
           - libssl-dev
-         
+
+{%- if (type == 'fullvm') %}
+  cc_centos_config:
+    type: "OS::Heat::CloudConfig"
+    properties:
+      cloud_config:
+        manage_etc_hosts: true
+        users:
+          - name: "ec2-user"
+            lock_passwd: true
+            ssh-authorized-keys:
+              - { get_attr: [ssh_key_internal, public_key] }
+            sudo: ALL=(ALL) NOPASSWD:ALL
+
+  cc_centos_provision_script:
+    type: "OS::Heat::SoftwareConfig"
+    properties:
+      config:
+        str_replace:
+          template: |
+            #cloud_config
+            merge_how: 'dict(recurse_array,no_replace)+list(append)'
+            write_files:
+              - path: /opt/tap.sh
+                permissions: '0544'
+                content: |
+                  #!/bin/bash
+                  if [ ! -d "/opt/rh/python27" ]; then
+                    if [ -n "$http_proxy" ]; then
+                      echo "proxy=$http_proxy" >> /etc/yum.conf
+                    fi
+                    yum update -y
+                    yum install -y gcc gmp-devel openssl-devel libffi-devel git
+                    yum install -y autoconf centos-release-scl redhat-lsb-core
+                    yum install -y python27
+                    if [ -n "$https_proxy" ]; then
+                      pip_proxy="--proxy $https_proxy"
+                    fi
+                    source /opt/rh/python27/enable
+                    pip install -I $pip_proxy cffi==1.7.0 pbr==1.10.0 setuptools>=11.3
+                    pip install -I $pip_proxy shade==1.8.0
+                    pip install -I $pip_proxy ansible==2.0.2.0
+                    sed -i -e "s/\/usr\/bin\/python/\/opt\/rh\/python27\/root\/usr\/bin\/python/" \
+                       /opt/rh/python27/root/usr/lib/python2.7/site-packages/ansible/modules/core/cloud/openstack/*py
+                  fi
+                  source /opt/rh/python27/enable
+                  export http_proxy=$http_proxy
+                  export https_proxy=$https_proxy
+                  export no_proxy=$no_proxy
+                  export HOME=/root
+                  LOOP=1
+                  while [ "$LOOP" -ne 0 ]
+                  do
+                    ansible-pull -U $ansible_repo -C $ansible_branch  -f
+                    LOOP=$?
+                    sleep 60
+                  done
+          params:
+            $http_proxy: { get_param: proxy_http }
+            $https_proxy: { get_param: proxy_https }
+            $no_proxy: { get_param: proxy_no }
+            $ansible_repo: { get_param: ansible_repo }
+            $ansible_branch: { get_param: ansible_branch }
+{%- endif %}
+
   cc_config_files:
     type: "OS::Heat::CloudConfig"
     properties:
@@ -1058,6 +1122,50 @@ resources:
               localhost ansible_connection=local
               #nginx:vars were moved to /etc/ansible/group_vars/nginx
 
+{%- if (type == 'fullvm') %}
+  cc_masters_hosts:
+    type: "OS::Heat::CloudConfig"
+    properties:
+      cloud_config:
+        merge_how: 'dict(recurse_array,no_replace)+list(append)'
+        write_files:
+          - path: /etc/ansible/hosts
+            content: |
+              [masters]
+              localhost ansible_connection=local
+              #masters:vars were moved to /etc/ansible/group_vars/masters
+              [masters:vars]
+              provider=openstack
+
+  cc_manager_hosts:
+    type: "OS::Heat::CloudConfig"
+    properties:
+      cloud_config:
+        merge_how: 'dict(recurse_array,no_replace)+list(append)'
+        write_files:
+          - path: /etc/ansible/hosts
+            content: |
+              [manager]
+              localhost ansible_connection=local
+              #manager:vars were moved to /etc/ansible/group_vars/manager
+              [manager:vars]
+              provider=openstack
+
+  cc_workers_hosts:
+    type: "OS::Heat::CloudConfig"
+    properties:
+      cloud_config:
+        merge_how: 'dict(recurse_array,no_replace)+list(append)'
+        write_files:
+          - path: /etc/ansible/hosts
+            content: |
+              [workers]
+              localhost ansible_connection=local
+              #workers:vars were moved to /etc/ansible/group_vars/workers
+              [workers:vars]
+              provider=openstack
+{%- endif %}
+
   cc_runcmd:
     type: "OS::Heat::CloudConfig"
     properties:
@@ -1087,7 +1195,39 @@ resources:
       - config: { get_resource: cc_nginx_hosts }
       - { config: { get_resource: cc_provision_script }, type: "text", subtype: "cloud-config" }
       - config: { get_resource: cc_runcmd }
-        
+
+{%- if (type == 'fullvm') %}
+  cc_masters:
+    type: "OS::Heat::MultipartMime"
+    properties:
+      parts:
+      - config: { get_resource: cc_centos_config }
+      - config: { get_resource: cc_config_files }
+      - config: { get_resource: cc_masters_hosts }
+      - { config: { get_resource: cc_centos_provision_script }, type: "text", subtype: "cloud-config" }
+      - config: { get_resource: cc_runcmd }
+
+  cc_manager:
+    type: "OS::Heat::MultipartMime"
+    properties:
+      parts:
+      - config: { get_resource: cc_centos_config }
+      - config: { get_resource: cc_config_files }
+      - config: { get_resource: cc_manager_hosts }
+      - { config: { get_resource: cc_centos_provision_script }, type: "text", subtype: "cloud-config" }
+      - config: { get_resource: cc_runcmd }
+
+  cc_workers:
+    type: "OS::Heat::MultipartMime"
+    properties:
+      parts:
+      - config: { get_resource: cc_centos_config }
+      - config: { get_resource: cc_config_files }
+      - config: { get_resource: cc_workers_hosts }
+      - { config: { get_resource: cc_centos_provision_script }, type: "text", subtype: "cloud-config" }
+      - config: { get_resource: cc_runcmd }
+{%- endif %}
+
 ########################################
 # Servers / jumpbox
 #
@@ -1122,13 +1262,6 @@ resources:
       floatingip_id: { get_resource: jumpbox_floating_ip }
       port_id: { get_resource: jumpbox_port }
 
-  centos_cc:
-    type: OS::Heat::CloudConfig
-    properties:
-      cloud_config: 
-        package_update: true
-        package_upgrade: true
-
 ########################################
 # Servers / nignx
 #
@@ -1156,6 +1289,7 @@ resources:
         - { get_resource: secgroup_cfPublic}
       fixed_ips:
         - subnet: { get_resource: public_subnet }
+
   ip_assoc:
     type: AWS::EC2::EIPAssociation
     properties:
@@ -1169,7 +1303,7 @@ resources:
 #
   cloudera_masters:
     type: OS::Heat::ResourceGroup
-    depends_on: cloudera_subnet
+    depends_on: cloudera_manager
     properties:
       count: 2
       resource_def:
@@ -1188,13 +1322,15 @@ resources:
             - { get_resource: secgroup_consul }
           networks:
             - network: { get_resource: cdh_network }
+          user_data_format: RAW
+          user_data: { get_resource: cc_masters }
 
 ########################################
 # Servers / cdh-workers
 #
   cloudera_workers:
     type: OS::Heat::ResourceGroup
-    depends_on: cloudera_subnet
+    depends_on: cloudera_masters
     properties:
       count: { get_param: cloudera_workers_count }
       resource_def:
@@ -1212,6 +1348,9 @@ resources:
             - { get_resource: secgroup_cloudera }
           networks:
             - network: { get_resource: cdh_network }
+          user_data_format: RAW
+          user_data: { get_resource: cc_workers }
+
 
 ########################################
 # Servers / cdh-manager
@@ -1229,6 +1368,8 @@ resources:
       config_drive: true
       networks:
         - port: { get_resource: manager_port }
+      user_data_format: RAW
+      user_data: { get_resource: cc_manager }
 
   manager_port:
     type: OS::Neutron::Port
