@@ -547,6 +547,12 @@ resources:
           remote_mode: remote_group_id
           direction: ingress
         - protocol: tcp
+          port_range_min: 9200
+          port_range_max: 9200
+          remote_group_id: { get_resource: secgroup_jumpbox_ssh }
+          remote_mode: remote_group_id
+          direction: ingress
+        - protocol: tcp
           remote_group_id: { get_resource: secgroup_cfPublic }
           remote_mode: remote_group_id
           direction: ingress
