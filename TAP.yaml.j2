@@ -908,6 +908,7 @@ resources:
                     yum install -y gcc gmp-devel openssl-devel libffi-devel git
                     yum install -y autoconf centos-release-scl redhat-lsb-core
                     yum install -y python27-python python27-python-devel
+                    yum -y update kernel kernel-devel kernel-firmware kernel-headers perf
                     if [ -n "$https_proxy" ]; then
                       pip_proxy="--proxy $https_proxy"
                     fi
@@ -930,6 +931,7 @@ resources:
                     LOOP=$?
                     sleep 60
                   done
+                  diff -q <(uname -r) <(rpm -q --last kernel |head -1 |awk '{sub("kernel-","");print $1}') || reboot
           params:
             $http_proxy: { get_param: proxy_http }
             $https_proxy: { get_param: proxy_https }
@@ -984,6 +986,11 @@ resources:
                   export https_proxy=$https_proxy
                   export no_proxy=$no_proxy
                   export HOME=/root
+                  export DEBIAN_FRONTEND=noninteractive
+                  apt-get -q update
+                  apt-get -qy install autoconf build-essential python-dev libffi-dev libssl-dev
+                  apt-get -qy upgrade
+                  apt-get -qy dist-upgrade
                   if [ -n "$https_proxy" ]; then
                     pip_proxy="--proxy $https_proxy"
                   fi
@@ -996,6 +1003,9 @@ resources:
                     LOOP=$?
                     sleep 60
                   done
+                  if [ -f "/var/run/reboot-required" ]; then
+                    reboot
+                  fi
           params:
             $http_proxy: { get_param: proxy_http }
             $https_proxy: { get_param: proxy_https }
