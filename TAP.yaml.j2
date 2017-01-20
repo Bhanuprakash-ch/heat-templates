@@ -907,7 +907,7 @@ resources:
                     yum update -y
                     yum install -y gcc gmp-devel openssl-devel libffi-devel git
                     yum install -y autoconf centos-release-scl redhat-lsb-core
-                    yum install -y python27-python python27-python-devel
+                    yum install -y python27-python python27-python-devel python27-python-pip
                     yum -y update kernel kernel-devel kernel-firmware kernel-headers perf
                     if [ -n "$https_proxy" ]; then
                       pip_proxy="--proxy $https_proxy"
